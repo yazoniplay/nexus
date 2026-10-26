@@ -68,7 +68,7 @@ function renderProviderSettings() {
   $("providerSettings").innerHTML = providers.map(p => {
     const configured = Boolean(providerStatus[p.id]?.configured);
     const extra = p.id === "ollama" ? "Uses Ollama Cloud's hosted API. Add OLLAMA_API_KEY on the backend; no local Ollama installation is required." : p.description;
-    return '<article class="provider-setting"><div class="provider-setting-head"><div class="provider-logo '+p.className+'">'+p.letter+'</div><div><h3>'+p.name+'</h3><p>'+p.modelLabel+'</p></div></div><p>'+extra+'</p><div class="setting-bottom"><span class="setting-value">'+(configured?"KEY CONFIGURED":"KEY NOT CONFIGURED")+'</span><button class="subtle-button test-provider" data-provider="'+p.id+'" '+(!backendHealthy||!configured?"disabled":"")+'>'+(configured?"Test connection":"Setup required")+'</button></div></article>';
+    return '<article class="provider-setting"><div class="provider-setting-head"><div class="provider-logo '+p.className+'">'+p.letter+'</div><div><h3>'+p.name+'</h3><p>'+p.modelLabel+'</p></div></div><p>'+extra+'</p><div class="setting-bottom"><span class="setting-value">'+(configured?"KEY CONFIGURED":"KEY NOT CONFIGURED")+'</span><button class="subtle-button test-provider" data-provider="'+p.id+'" '+(!aiHealthy||!configured?"disabled":"")+'>'+(configured?"Test connection":"Setup required")+'</button></div></article>';
   }).join("");
   document.querySelectorAll(".test-provider").forEach(btn => btn.addEventListener("click", async () => {
     try {
