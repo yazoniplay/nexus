@@ -10,7 +10,7 @@ const STORAGE_KEY="nexus.chats.v2";
 let providerStatus={};
 let chats=[];
 let activeChatId=null;
-let sending=false;
+let sending=false;\nlet repositories=[];\nlet selectedRepo=localStorage.getItem("nexus.github.repo")||"";
 const uid=()=>Date.now().toString(36)+Math.random().toString(36).slice(2,8);
 const escapeHTML=s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 function toast(message,error=false){const el=document.createElement("div");el.className="toast"+(error?" error":"");el.textContent=message;$("toastRegion").appendChild(el);setTimeout(()=>el.remove(),4500);}
@@ -40,6 +40,37 @@ async function refreshStatus(){
  try{const r=await fetch(NEXUS_AI_URL,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({action:"status"})});const data=await r.json().catch(()=>({}));if(!r.ok)throw new Error(data.error||"Status request failed");providerStatus=data.providers||{};renderProviders();}
  catch(e){providerStatus={};renderProviders();$("connectionText").textContent="AI gateway unavailable";$("connectionDot").className="offline";toast(e.message||"Could not reach the AI gateway.",true);}
 }
+async function refreshRepos(){
+ const select=$("repoSelect"),hint=$("repoHint"),button=$("refreshRepos");
+ if(!select||!hint)return;
+ button.disabled=true;hint.className="repo-hint";hint.textContent="Loading repositories…";
+ try{
+   const r=await fetch(NEXUS_AI_URL,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({action:"github_repos"})});
+   const data=await r.json().catch(()=>({}));
+   if(!r.ok)throw new Error(data.error||"Could not load GitHub repositories.");
+   repositories=Array.isArray(data.repositories)?data.repositories:[];
+   select.innerHTML='<option value="">No repository selected</option>'+repositories.map(repo=>'<option value="'+escapeHTML(repo.full_name)+'">'+escapeHTML(repo.full_name)+(repo.private?' · private':'')+'</option>').join("");
+   if(selectedRepo&&repositories.some(repo=>repo.full_name===selectedRepo))select.value=selectedRepo;
+   else {selectedRepo="";localStorage.removeItem("nexus.github.repo");}
+   updateRepoHint();
+ }catch(e){
+   select.innerHTML='<option value="">No repository selected</option>';
+   hint.className="repo-hint error";hint.textContent=e.message||"GitHub connection failed.";
+ }finally{button.disabled=false;}
+}
+function updateRepoHint(){
+ const hint=$("repoHint");
+ if(!selectedRepo){hint.className="repo-hint";hint.textContent="Choose a repo to let AIs inspect its code.";return;}
+ const repo=repositories.find(r=>r.full_name===selectedRepo);
+ hint.className="repo-hint selected";hint.textContent=repo?"✓ Selected · "+(repo.default_branch||"default branch"):"Repository selected";
+}
+$("repoSelect").addEventListener("change",e=>{
+ selectedRepo=e.target.value;
+ if(selectedRepo)localStorage.setItem("nexus.github.repo",selectedRepo);else localStorage.removeItem("nexus.github.repo");
+ updateRepoHint();
+ toast(selectedRepo?"Repository selected. Its source files will be sent as context with your next message.":"Repository context turned off.");
+});
+$("refreshRepos").addEventListener("click",refreshRepos);
 function newChat(){
  const c={id:uid(),title:"New chat",createdAt:Date.now(),messages:[]};
  chats.unshift(c);activeChatId=c.id;saveChats();renderHistory();renderMessages();$("chatInput").focus();closeSidebar();
@@ -82,7 +113,7 @@ async function sendMessage(raw){
  pending.innerHTML='<div class="message-avatar">N</div><div class="message-content"><div class="message-label">Nexus <span class="message-model">Waiting for responses</span></div><div class="loading-dots" aria-label="AI models are responding"><i></i><i></i><i></i></div></div>';
  $("messages").appendChild(pending);$("welcome").hidden=true;scrollBottom();
  try{
-   const r=await fetch(NEXUS_AI_URL,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({action:"chat",message:text})});
+   const r=await fetch(NEXUS_AI_URL,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({action:"chat",message:text,repo:selectedRepo})});
    const data=await r.json().catch(()=>({}));
    if(!r.ok)throw new Error(data.error||data.message||"AI request failed ("+r.status+")");
    const responses=Array.isArray(data.responses)?data.responses:[];
@@ -113,4 +144,4 @@ $("openSidebar").addEventListener("click",openSidebar);
 $("closeSidebar").addEventListener("click",closeSidebar);
 $("mobileScrim").addEventListener("click",closeSidebar);
 window.addEventListener("resize",()=>{if(window.innerWidth>700)closeSidebar();});
-loadChats();refreshStatus();
+loadChats();refreshStatus();refreshRepos();
