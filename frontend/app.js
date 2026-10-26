@@ -15,6 +15,8 @@ let chats=[];
 let activeChatId=null;
 let sending=false;
 let buildMode=false;
+let executionMode=localStorage.getItem("nexus.build.mode")||"pull_request";
+let effortLevel=localStorage.getItem("nexus.build.effort")||"medium";
 let repositories=[];
 let selectedRepo=localStorage.getItem("nexus.github.repo")||"";
 const uid=()=>Date.now().toString(36)+Math.random().toString(36).slice(2,8);
@@ -146,14 +148,14 @@ async function sendMessage(raw){
  pending.innerHTML='<div class="message-avatar">N</div><div class="message-content"><div class="message-label">Nexus <span class="message-model">Waiting for responses</span></div><div class="loading-dots" aria-label="AI models are responding"><i></i><i></i><i></i></div></div>';
  $("messages").appendChild(pending);$("welcome").hidden=true;scrollBottom();
  try{
-   const r=await fetch(NEXUS_AI_URL,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({action:buildMode?"build":"chat",message:text,repo:selectedRepo})});
+   const r=await fetch(NEXUS_AI_URL,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({action:buildMode?"build":"chat",message:text,repo:selectedRepo,mode:executionMode,effort:effortLevel})});
    const data=await r.json().catch(()=>({}));
    if(!r.ok)throw new Error(data.error||data.message||"AI request failed ("+r.status+")");
    if(buildMode){
      const build=data.build;
      if(!build)throw new Error("The gateway returned no build result.");
      const files=Array.isArray(build.files)?build.files:[];
-     appendMessage({id:uid(),role:"assistant",provider:"nexus",name:"Nexus Build",text:String(build.summary||"Build generated.")+(files.length?"\n\nCommitted to branch "+(build.branch||"")+" and opened PR "+(build.pr?.number?"#"+build.pr.number:"")+".":"\n\nNo files were committed.")+((build.team?.engineers||[]).length?"\n\nTeam: "+build.team.engineers.join(" + ")+" · peer review: "+(build.team.reviews||[]).join(", ")+" · lead: "+(build.team.lead||"Nexus"):"")+((build.notes||[]).length?"\n\nNotes: "+build.notes.join(" · "):""),files,pr:build.pr||null,branch:build.branch||"",team:build.team||null,at:Date.now()});
+     appendMessage({id:uid(),role:"assistant",provider:"nexus",name:"Nexus Build",text:String(build.summary||"Build generated.")+(files.length?(build.mode==="pull_request"?"\n\nCommitted to branch "+(build.branch||"")+" and opened PR "+(build.pr?.number?"#"+build.pr.number:"")+".":"\n\nCommitted directly to "+(build.branch||"the default branch")+"."):"\n\nNo files were committed.")+((build.team?.engineers||[]).length?"\n\nTeam: "+build.team.engineers.join(" + ")+" · peer review: "+(build.team.reviews||[]).join(", ")+" · lead: "+(build.team.lead||"Nexus"):"")+((build.notes||[]).length?"\n\nNotes: "+build.notes.join(" · "):""),files,pr:build.pr||null,branch:build.branch||"",team:build.team||null,at:Date.now()});
      return;
    }
    const responses=Array.isArray(data.responses)?data.responses:[];
@@ -178,8 +180,9 @@ $("modeToggle").addEventListener("click",()=>{
  button.classList.toggle("active",buildMode);
  button.setAttribute("aria-pressed",String(buildMode));
  button.textContent=buildMode?"🛠 Build mode":"💬 Chat mode";
+  $("buildControls").hidden=!buildMode;
  $("chatInput").placeholder=buildMode?"Describe what you want Nexus to implement in the selected repository…":"Message Nexus…";
- $("composerHint").textContent=buildMode?"Build mode coordinates the AI team, commits changes to a new GitHub branch, and opens a pull request. Select a repository first.":"Enter to send · Shift + Enter for a new line";
+ $("composerHint").textContent=buildMode?"Choose execution mode and effort. Automatic commits directly; Pull Request opens a PR.":"Enter to send · Shift + Enter for a new line";
 });
 
 function resizeInput(){const el=$("chatInput");el.style.height="auto";el.style.height=Math.min(el.scrollHeight,220)+"px";}
@@ -194,4 +197,7 @@ $("openSidebar").addEventListener("click",openSidebar);
 $("closeSidebar").addEventListener("click",closeSidebar);
 $("mobileScrim").addEventListener("click",closeSidebar);
 window.addEventListener("resize",()=>{if(window.innerWidth>700)closeSidebar();});
+$("executionMode").value=executionMode; $("effortLevel").value=effortLevel;
+$("executionMode").addEventListener("change",e=>{executionMode=e.target.value;localStorage.setItem("nexus.build.mode",executionMode);});
+$("effortLevel").addEventListener("change",e=>{effortLevel=e.target.value;localStorage.setItem("nexus.build.effort",effortLevel);});
 loadChats();refreshStatus();refreshRepos();
