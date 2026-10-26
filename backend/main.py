@@ -82,6 +82,7 @@ def status():
             "live_model_calls": True,
             "multi_model_discussion": True,
             "github_integration": github_is_configured(),
+            "github_actions": bool(os.getenv("SUPABASE_URL", "").strip() and os.getenv("SUPABASE_SERVICE_ROLE_KEY", "").strip()),
             "durable_jobs": False,
             "isolated_code_execution": False,
         },
