@@ -83,7 +83,7 @@ Deno.serve(async(req:Request)=>{
    let raw="";
    try{raw=(await generate(active[0],prompt,system,6500)).text;}catch(e){return json(502,{error:"Build generation failed: "+String(e instanceof Error?e.message:e).slice(0,240)});}
    let parsed:any;
-   try{const cleaned=raw.trim().replace(/^```json\\s*/i,"").replace(/^```\\s*/,"").replace(/\\s*```$/,"");parsed=JSON.parse(cleaned);}catch{return json(502,{error:"The AI returned invalid build JSON. Try a smaller, more specific request."});}
+   try{const cleaned=raw.trim().replace(/^```json\s*/i,"").replace(/^```\s*/,"").replace(/\s*```$/,"");parsed=JSON.parse(cleaned);}catch{return json(502,{error:"The AI returned invalid build JSON. Try a smaller, more specific request."});}
    const files=Array.isArray(parsed.files)?parsed.files.filter((f:any)=>f&&typeof f.path==="string"&&typeof f.content==="string"&&f.path.length<220&&!f.path.startsWith("/")&&!f.path.split("/").includes("..")&&!/(^|\/)(\.env[^/]*|secrets?)(\/|$)|(^|\/)\.github\/workflows\//i.test(f.path)).slice(0,5):[];
    return json(200,{build:{summary:String(parsed.summary||"Build generated."),files:files.map((f:any)=>({path:f.path,content:f.content,reason:String(f.reason||"")})),notes:Array.isArray(parsed.notes)?parsed.notes.map(String).slice(0,8):[]},repository:{full_name:repoName,branch:repoInfo.branch,files_loaded:repoInfo.files}});
   }
