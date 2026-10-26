@@ -151,6 +151,7 @@ def configure_github_routes(app) -> None:
         try:
             client_id = _required("GITHUB_APP_CLIENT_ID")
             _required("GITHUB_APP_CLIENT_SECRET")
+            _required("GITHUB_CALLBACK_URL")
             _required("NEXUS_SESSION_SECRET")
             _required("NEXUS_ENCRYPTION_KEY")
             _supabase_config()
