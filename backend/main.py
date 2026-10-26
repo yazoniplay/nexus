@@ -163,6 +163,8 @@ async def chat(request: ChatRequest):
     done, pending = await asyncio.wait(tasks, timeout=DISCUSSION_TIMEOUT_SECONDS)
     for task in pending:
         task.cancel()
+    if pending:
+        await asyncio.gather(*pending, return_exceptions=True)
     results: list[dict] = []
     failures: list[dict[str, str]] = []
     for task in done:
