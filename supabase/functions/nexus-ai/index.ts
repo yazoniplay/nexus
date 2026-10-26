@@ -129,7 +129,10 @@ Deno.serve(async(req:Request)=>{
    const baseRef=await github(prefix+"/git/ref/heads/"+encodeURIComponent(repoInfo.branch));
    const baseSha=String(baseRef?.object?.sha||"");
    if(!baseSha)return json(502,{error:"Could not resolve the base commit; no changes were made."});
-   const baseCommit=await github(prefix+"/git/commits/"+encodeURIComponent(baseSha));\n   const baseTreeSha=String(baseCommit?.tree?.sha||"");\n   if(!baseTreeSha)return json(502,{error:"Could not resolve the base tree; no changes were made."});\n   const tree=await githubRequest(prefix+"/git/trees",{method:"POST",body:{base_tree:baseTreeSha,tree:files.map((f:any)=>({path:f.path,mode:"100644",type:"blob",content:f.content}))}});
+   const baseCommit=await github(prefix+"/git/commits/"+encodeURIComponent(baseSha));
+   const baseTreeSha=String(baseCommit?.tree?.sha||"");
+   if(!baseTreeSha)return json(502,{error:"Could not resolve the base tree; no changes were made."});
+   const tree=await githubRequest(prefix+"/git/trees",{method:"POST",body:{base_tree:baseTreeSha,tree:files.map((f:any)=>({path:f.path,mode:"100644",type:"blob",content:f.content}))}});
    if(!tree?.sha)return json(502,{error:"GitHub did not create the file tree."});
    const commit=await githubRequest(prefix+"/git/commits",{method:"POST",body:{message:"Nexus: "+String(parsed.summary||"automated code changes").slice(0,65),tree:tree.sha,parents:[baseSha]}});
    if(!commit?.sha)return json(502,{error:"GitHub did not create the build commit."});
