@@ -29,3 +29,14 @@ def test_unknown_provider_connection_test_is_rejected():
 def test_chat_requires_non_empty_message():
     response = client.post("/api/chat", json={"message": ""})
     assert response.status_code == 422
+
+
+def test_github_connection_is_not_authenticated_by_default():
+    response = client.get("/api/github/connection")
+    assert response.status_code == 200
+    assert response.json() == {"connected": False}
+
+
+def test_github_repository_list_requires_session():
+    response = client.get("/api/github/repositories")
+    assert response.status_code == 401
