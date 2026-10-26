@@ -86,9 +86,26 @@ function renderMessages(){
    if(m.role==="user")return '<article class="message user"><div class="message-content">'+escapeHTML(m.text)+'</div></article>';
    const p=PROVIDERS.find(x=>x.id===m.provider);
    const name=m.name||(p?p.name:(m.provider||"AI"));
-   return '<article class="message '+(m.error?"error":"")+'"><div class="message-avatar">'+escapeHTML(p?.letter||name.slice(0,1).toUpperCase())+'</div><div class="message-content"><div class="message-label">'+escapeHTML(name)+' <span class="message-model">'+escapeHTML(m.model||"")+'</span></div><div class="message-text">'+formatText(m.text||"No response returned.")+'</div></div></article>';
+   return '<article class="message '+(m.error?"error":"")+'"><div class="message-avatar">'+escapeHTML(p?.letter||name.slice(0,1).toUpperCase())+'</div><div class="message-content"><div class="message-label">'+escapeHTML(name)+' <span class="message-model">'+escapeHTML(m.model||"")+'</span></div><div class="message-text">'+formatText(m.text||"No response returned.")+'</div>'+renderBuildArtifacts(m.files,m.id)+'</div></article>';
  }).join("");
+
+ host.querySelectorAll("[data-build-action]").forEach(btn=>btn.addEventListener("click",()=>{
+   const msg=activeChat()?.messages.find(item=>item.id===btn.dataset.buildMessage);
+   const file=msg?.files?.[Number(btn.dataset.buildIndex)];
+   if(!file)return;
+   if(btn.dataset.buildAction==="copy"){
+     if(!navigator.clipboard){toast("Clipboard unavailable in this browser.",true);return;}
+     navigator.clipboard.writeText(file.content).then(()=>toast("Copied "+file.path)).catch(()=>toast("Could not access clipboard.",true));
+   }else{
+     const url=URL.createObjectURL(new Blob([file.content],{type:"text/plain;charset=utf-8"}));
+     const link=document.createElement("a");link.href=url;link.download=file.path.split("/").pop()||"generated-file.txt";document.body.appendChild(link);link.click();link.remove();URL.revokeObjectURL(url);toast("Downloaded "+file.path);
+   }
+ }));
  scrollBottom();
+}
+function renderBuildArtifacts(files,messageId){
+ if(!Array.isArray(files)||!files.length)return "";
+ return '<div class="build-artifacts">'+files.map((file,i)=>'<section class="build-file"><div class="build-file-head"><div><strong>'+escapeHTML(file.path)+'</strong><small>'+escapeHTML(file.reason||"Generated file")+'</small></div><div class="build-file-actions"><button type="button" data-build-action="copy" data-build-message="'+escapeHTML(messageId)+'" data-build-index="'+i+'">Copy</button><button type="button" data-build-action="download" data-build-message="'+escapeHTML(messageId)+'" data-build-index="'+i+'">Download</button></div></div><pre><code>'+escapeHTML(file.content)+'</code></pre></section>').join("")+'</div>';
 }
 function formatText(text){
  // Escape first; preserve code fences and simple paragraphs without interpreting model output as HTML.
@@ -124,7 +141,7 @@ async function sendMessage(raw){
      if(!build)throw new Error("The gateway returned no build result.");
      const files=Array.isArray(build.files)?build.files:[];
      const artifactText=files.map(file=>"FILE: "+file.path+"\n"+(file.reason||"Generated file")+"\n\n\`\`\`\n"+file.content+"\n\`\`\`").join("\n\n");
-     appendMessage({id:uid(),role:"assistant",provider:"nexus",name:"Nexus Build",text:String(build.summary||"Build generated.")+(artifactText?"\n\n"+artifactText:"\n\nNo files were generated.")+((build.notes||[]).length?"\n\nNotes: "+build.notes.join(" · "):""),at:Date.now()});
+     appendMessage({id:uid(),role:"assistant",provider:"nexus",name:"Nexus Build",text:String(build.summary||"Build generated.")+(artifactText?"\n\n"+artifactText:"\n\nNo files were generated.")+((build.notes||[]).length?"\n\nNotes: "+build.notes.join(" · "):""),files,at:Date.now()});
      return;
    }
    const responses=Array.isArray(data.responses)?data.responses:[];
