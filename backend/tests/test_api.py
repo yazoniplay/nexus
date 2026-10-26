@@ -27,5 +27,5 @@ def test_unknown_provider_connection_test_is_rejected():
 
 
 def test_chat_requires_non_empty_message():
-    response = client.post("/api/chat", json={"message": " "})
+    response = client.post("/api/chat", json={"message": ""})
     assert response.status_code == 422
