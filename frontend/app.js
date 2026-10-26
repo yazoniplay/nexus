@@ -8,6 +8,7 @@ const PROVIDERS=[
 ];
 const STORAGE_KEY="nexus.chats.v2";
 let providerStatus={};
+let providerTests={};
 let chats=[];
 let activeChatId=null;
 let sending=false;
@@ -34,14 +35,30 @@ function renderHistory(){
 function renderProviders(){
  const list=PROVIDERS.map(p=>{
    const configured=Boolean(providerStatus[p.id]?.configured);
-   const label=configured?"Connected":"Not set up";
-   return '<div class="provider-mini"><span class="provider-letter">'+p.letter+'</span><span class="provider-name">'+p.name+'</span><span class="provider-state '+(configured?"online":"")+'">'+label+'</span></div>';
+   const test=providerTests[p.id];
+   const label=test?.checking?"Testing…":test?.ok?"Verified":test?.error?"Failed":configured?"Key found":"No key";
+   return '<div class="provider-mini"><span class="provider-letter">'+p.letter+'</span><span class="provider-name">'+p.name+'</span><span class="provider-state '+(test?.ok?"online":test?.error?"failed":configured?"":"")+'">'+label+'</span><button class="provider-test" type="button" data-test-provider="'+p.id+'" '+(!configured||test?.checking?"disabled":"")+'>'+(test?.checking?"…":"Test")+'</button></div>';
  }).join("");
  $("sidebarProviders").innerHTML=list;
+ $("sidebarProviders").querySelectorAll("[data-test-provider]").forEach(btn=>btn.addEventListener("click",()=>testProvider(btn.dataset.testProvider)));
  $("welcomeProviders").innerHTML=PROVIDERS.filter(p=>providerStatus[p.id]?.configured).map(p=>'<span class="ai-pill"><span class="provider-letter">'+p.letter+'</span>'+p.name+'<i class="pill-dot online"></i></span>').join("");
  const count=PROVIDERS.filter(p=>providerStatus[p.id]?.configured).length;
  $("connectionText").textContent=count?count+" AI"+(count===1?"":"s")+" connected":"No AIs connected";
  $("connectionDot").className=count?"online":"offline";
+}
+async function testProvider(provider){
+ const p=PROVIDERS.find(item=>item.id===provider);if(!p||!providerStatus[provider]?.configured)return;
+ providerTests[provider]={checking:true};renderProviders();
+ try{
+  const r=await fetch(NEXUS_AI_URL,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({action:"test",provider})});
+  const data=await r.json().catch(()=>({}));
+  if(!r.ok||!data.ok)throw new Error(data.error||data.message||("HTTP "+r.status));
+  providerTests[provider]={ok:true,model:data.model,message:data.message};
+  toast(p.name+" passed live test using "+(data.model||"its configured model")+".");
+ }catch(e){
+  providerTests[provider]={error:true,message:e.message||"Unknown provider error"};
+  toast(p.name+" test failed: "+(e.message||"Unknown provider error"),true);
+ }finally{renderProviders();}
 }
 async function refreshStatus(){
  $("connectionText").textContent="Checking AIs…";$("connectionDot").className="";
