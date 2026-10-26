@@ -15,6 +15,8 @@ let chats=[];
 let activeChatId=null;
 let sending=false;
 let buildMode=false;
+let pendingImages=[];
+const MAX_IMAGES=4, MAX_IMAGE_BYTES=500*1024;
 let executionMode=localStorage.getItem("nexus.build.mode")||"pull_request";
 let effortLevel=localStorage.getItem("nexus.build.effort")||"medium";
 let repositories=[];
@@ -90,7 +92,7 @@ function renderMessages(){
  if(!c||!c.messages.length){welcome.hidden=false;host.innerHTML="";return;}
  welcome.hidden=true;
  host.innerHTML=c.messages.map(m=>{
-   if(m.role==="user")return '<article class="message user"><div class="message-content">'+escapeHTML(m.text)+'</div></article>';
+   if(m.role==="user")return '<article class="message user"><div class="message-content">'+escapeHTML(m.text||"")+(Array.isArray(m.images)&&m.images.length?'<div class="message-images">'+m.images.map(src=>'<img src="'+src+'" alt="Uploaded image" loading="lazy">').join("")+'</div>':"")+'</div></article>';
    const p=PROVIDERS.find(x=>x.id===m.provider);
    const name=m.name||(p?p.name:(m.provider||"AI"));
    return '<article class="message '+(m.error?"error":"")+'"><div class="message-avatar">'+escapeHTML(p?.letter||name.slice(0,1).toUpperCase())+'</div><div class="message-content"><div class="message-label">'+escapeHTML(name)+' <span class="message-model">'+escapeHTML(m.model||"")+'</span></div><div class="message-text">'+formatText(m.text||"No response returned.")+'</div>'+renderBuildArtifacts(m.files,m.id,m.pr)+renderTeamDiscussion(m.team)+'</div></article>';
@@ -139,17 +141,20 @@ function setSending(value){sending=value;$("sendButton").disabled=value;$("chatI
 function appendMessage(message){const c=activeChat();if(!c)return;c.messages.push(message);saveChats();renderHistory();renderMessages();}
 function titleFrom(text){const t=text.replace(/\s+/g," ").trim();return t.length>36?t.slice(0,36).trim()+"…":t||"New chat";}
 async function sendMessage(raw){
- const text=raw.trim();if(!text||sending)return;
+ const text=raw.trim();if((!text&&!pendingImages.length)||sending)return;
+ const images=pendingImages.map(item=>({mimeType:item.mimeType,data:item.data}));
+ const visibleImages=pendingImages.map(item=>item.dataUrl);
+ pendingImages=[];renderImageAttachments();
  if(!activeChat())newChat();
  const chat=activeChat();
  if(!chat.messages.some(m=>m.role==="user"))chat.title=titleFrom(text);
- appendMessage({id:uid(),role:"user",text,at:Date.now()});
+ appendMessage({id:uid(),role:"user",text,images:visibleImages,at:Date.now()});
  $("chatInput").value="";resizeInput();setSending(true);
  const pending=document.createElement("article");pending.className="message";pending.id="pendingMessage";
  pending.innerHTML='<div class="message-avatar">N</div><div class="message-content"><div class="message-label">Nexus <span class="message-model">Waiting for responses</span></div><div class="loading-dots" aria-label="AI models are responding"><i></i><i></i><i></i></div></div>';
  $("messages").appendChild(pending);$("welcome").hidden=true;scrollBottom();
  try{
-   const r=await fetch(NEXUS_AI_URL,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({action:buildMode?"build":"chat",message:text,repo:selectedRepo,mode:executionMode,effort:effortLevel})});
+   const r=await fetch(NEXUS_AI_URL,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({action:buildMode?"build":"chat",message:text,images:buildMode?[]:images,repo:selectedRepo,mode:executionMode,effort:effortLevel})});
    const data=await r.json().catch(()=>({}));
    if(!r.ok)throw new Error(data.error||data.message||"AI request failed ("+r.status+")");
    if(buildMode){
@@ -160,11 +165,10 @@ async function sendMessage(raw){
      return;
    }
    const responses=Array.isArray(data.responses)?data.responses:[];
-   if(responses.length){
-     // Show every model's response inline. No details element, disclosure button, or extra click.
+   if(data.message){
+     appendMessage({id:uid(),role:"assistant",provider:"nexus",name:"Nexus · Team conclusion",text:data.message,team:data.team||null,at:Date.now()});
+   }else if(responses.length){
      responses.forEach(item=>appendMessage({id:uid(),role:"assistant",provider:item.provider,model:item.model,text:item.text||"No response text returned.",error:Boolean(item.error),at:Date.now()}));
-   }else if(data.message){
-     appendMessage({id:uid(),role:"assistant",provider:"nexus",name:"Nexus",text:data.message,at:Date.now()});
    }else throw new Error("The gateway returned no AI responses.");
    const failed=responses.filter(x=>x.error);
    if(failed.length)toast(failed.length+" AI provider(s) failed. Successful responses are shown.",true);
@@ -187,6 +191,9 @@ $("modeToggle").addEventListener("click",()=>{
 });
 
 function resizeInput(){const el=$("chatInput");el.style.height="auto";el.style.height=Math.min(el.scrollHeight,220)+"px";}
+function renderImageAttachments(){const host=$("imageAttachments");if(!host)return;host.hidden=!pendingImages.length;host.innerHTML=pendingImages.map((item,i)=>'<div class="image-attachment"><img src="'+item.dataUrl+'" alt="Image to upload"><button type="button" data-remove-image="'+i+'" aria-label="Remove image">×</button></div>').join("");host.querySelectorAll("[data-remove-image]").forEach(btn=>btn.addEventListener("click",()=>{pendingImages.splice(Number(btn.dataset.removeImage),1);renderImageAttachments();}));}
+$("attachImages").addEventListener("click",()=>{if(sending)return;$("imageInput").click();});
+$("imageInput").addEventListener("change",async e=>{const files=Array.from(e.target.files||[]);for(const file of files){if(pendingImages.length>=MAX_IMAGES){toast("Maximum 4 images per message.",true);break;}if(!["image/jpeg","image/png","image/webp","image/gif"].includes(file.type)){toast("Use JPG, PNG, WEBP or GIF images.",true);continue;}if(file.size>MAX_IMAGE_BYTES){toast(file.name+" is over 500 KB. Please use a smaller image.",true);continue;}try{const dataUrl=await new Promise((resolve,reject)=>{const reader=new FileReader();reader.onload=()=>resolve(String(reader.result));reader.onerror=reject;reader.readAsDataURL(file);});const comma=dataUrl.indexOf(",");pendingImages.push({mimeType:file.type,data:dataUrl.slice(comma+1),dataUrl});}catch{toast("Could not read "+file.name,true);}}e.target.value="";renderImageAttachments();});
 function openSidebar(){$("sidebar").classList.add("open");$("mobileScrim").classList.add("show");}
 function closeSidebar(){$("sidebar").classList.remove("open");$("mobileScrim").classList.remove("show");}
 $("newChat").addEventListener("click",newChat);
