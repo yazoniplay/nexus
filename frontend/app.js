@@ -178,6 +178,7 @@ async function refreshGithubConnection() {
     githubLogin = data.login || "";
     $("connectGithubTop").textContent = githubConnected ? "Connected · " + githubLogin : "Connect GitHub ↗";
     $("connectGithubMain").textContent = githubConnected ? "GitHub connected: " + githubLogin : "Connect GitHub";
+    $("githubAccountLabel").textContent = githubConnected ? "Connected as " + githubLogin : "No GitHub account connected.";
     if (githubConnected) loadRepositories();
   } catch {
     githubConnected = false;
@@ -203,6 +204,22 @@ function connectGithub() {
 }
 $("connectGithubTop").addEventListener("click", connectGithub);
 $("connectGithubMain").addEventListener("click", connectGithub);
+$("disconnectGithub").addEventListener("click", async () => {
+  try {
+    const response = await fetch(NEXUS_API_BASE + "/api/github/disconnect", {method:"POST",credentials:"include"});
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.detail || "Disconnect failed");
+    githubConnected = false;
+    githubLogin = "";
+    $("connectGithubTop").textContent = "Connect GitHub ↗";
+    $("connectGithubMain").textContent = "Connect GitHub";
+    $("githubAccountLabel").textContent = "No GitHub account connected.";
+    $("repoCount").textContent = "0";
+    $("repoGrid").innerHTML = "";
+    $("repoEmpty").style.display = "block";
+    toast("GitHub disconnected.");
+  } catch (err) { toast(err.message || "Could not disconnect GitHub.", "error"); }
+});
 $("startTask").addEventListener("click", async () => {
   const message = $("quickTask").value.trim();
   if (!message) return toast("Describe the outcome you want first.", "error");
