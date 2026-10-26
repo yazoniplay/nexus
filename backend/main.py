@@ -15,6 +15,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
 import providers
+from github_oauth import configure_github_routes
 
 app = FastAPI(
     title="Nexus API",
@@ -33,7 +34,7 @@ _origins = [
 app.add_middleware(
     CORSMiddleware,
     allow_origins=_origins,
-    allow_credentials=False,
+    allow_credentials=True,
     allow_methods=["GET", "POST", "OPTIONS"],
     allow_headers=["Content-Type", "Authorization"],
 )
@@ -77,7 +78,7 @@ def status():
         "capabilities": {
             "live_model_calls": True,
             "multi_model_discussion": True,
-            "github_integration": False,
+            "github_integration": True,
             "durable_jobs": False,
             "isolated_code_execution": False,
         },
@@ -113,14 +114,6 @@ async def test_provider(provider: str):
     }
 
 
-@app.get("/api/github/repositories")
-def github_repositories():
-    raise HTTPException(
-        status_code=501,
-        detail="GitHub App OAuth is not configured yet. No repositories have been accessed.",
-    )
-
-
 async def _call_agent(provider: str, message: str, mode: str) -> dict:
     instructions = {
         "discuss": "Independently analyze the user's request. Give a practical answer, assumptions, risks, and next steps. Do not claim you used tools or changed files.",
@@ -137,6 +130,9 @@ async def _call_agent(provider: str, message: str, mode: str) -> dict:
         ),
         max_tokens=1000,
     )
+
+
+configure_github_routes(app)
 
 
 @app.post("/api/chat")
