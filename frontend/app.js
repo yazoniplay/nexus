@@ -11,6 +11,7 @@ let providerStatus={};
 let chats=[];
 let activeChatId=null;
 let sending=false;
+let buildMode=false;
 let repositories=[];
 let selectedRepo=localStorage.getItem("nexus.github.repo")||"";
 const uid=()=>Date.now().toString(36)+Math.random().toString(36).slice(2,8);
@@ -115,9 +116,17 @@ async function sendMessage(raw){
  pending.innerHTML='<div class="message-avatar">N</div><div class="message-content"><div class="message-label">Nexus <span class="message-model">Waiting for responses</span></div><div class="loading-dots" aria-label="AI models are responding"><i></i><i></i><i></i></div></div>';
  $("messages").appendChild(pending);$("welcome").hidden=true;scrollBottom();
  try{
-   const r=await fetch(NEXUS_AI_URL,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({action:"chat",message:text,repo:selectedRepo})});
+   const r=await fetch(NEXUS_AI_URL,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({action:buildMode?"build":"chat",message:text,repo:selectedRepo})});
    const data=await r.json().catch(()=>({}));
    if(!r.ok)throw new Error(data.error||data.message||"AI request failed ("+r.status+")");
+   if(buildMode){
+     const build=data.build;
+     if(!build)throw new Error("The gateway returned no build result.");
+     const files=Array.isArray(build.files)?build.files:[];
+     const artifactText=files.map(file=>"FILE: "+file.path+"\n"+(file.reason||"Generated file")+"\n\n\`\`\`\n"+file.content+"\n\`\`\`").join("\n\n");
+     appendMessage({id:uid(),role:"assistant",provider:"nexus",name:"Nexus Build",text:String(build.summary||"Build generated.")+(artifactText?"\n\n"+artifactText:"\n\nNo files were generated.")+((build.notes||[]).length?"\n\nNotes: "+build.notes.join(" · "):""),at:Date.now()});
+     return;
+   }
    const responses=Array.isArray(data.responses)?data.responses:[];
    if(responses.length){
      // Show every model's response inline. No details element, disclosure button, or extra click.
@@ -134,6 +143,15 @@ async function sendMessage(raw){
    $("pendingMessage")?.remove();setSending(false);renderHistory();renderMessages();$("chatInput").focus();
  }
 }
+$("modeToggle").addEventListener("click",()=>{
+ buildMode=!buildMode;
+ const button=$("modeToggle");
+ button.classList.toggle("active",buildMode);
+ button.setAttribute("aria-pressed",String(buildMode));
+ button.textContent=buildMode?"🛠 Build mode":"💬 Chat mode";
+ $("chatInput").placeholder=buildMode?"Describe what you want Nexus to implement in the selected repository…":"Message Nexus…";
+ $("composerHint").textContent=buildMode?"Build mode generates complete file contents; select a repository first.":"Enter to send · Shift + Enter for a new line";
+});
 function resizeInput(){const el=$("chatInput");el.style.height="auto";el.style.height=Math.min(el.scrollHeight,220)+"px";}
 function openSidebar(){$("sidebar").classList.add("open");$("mobileScrim").classList.add("show");}
 function closeSidebar(){$("sidebar").classList.remove("open");$("mobileScrim").classList.remove("show");}
