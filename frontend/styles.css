@@ -9,3 +9,10 @@
 .repo-hint{font-size:10px;line-height:1.5;color:#777;margin-top:7px}
 .repo-hint.error{color:#e6a29a}
 .repo-hint.selected{color:#b9e6a1}
+
+/* Repository build mode */
+.composer-actions{display:flex;align-items:center;gap:10px;min-width:0}
+.mode-toggle{flex:0 0 auto;border:1px solid #484848;border-radius:8px;background:#242424;color:#aaa;padding:6px 9px;font-size:10px;transition:background .16s,border-color .16s,color .16s}
+.mode-toggle:hover{color:#fff;border-color:#666}
+.mode-toggle.active{background:#d7e7ce;color:#1d2819;border-color:#d7e7ce}
+@media(max-width:700px){.composer-actions{gap:7px}.mode-toggle{padding:7px 8px;font-size:10px}.composer-bottom>span{line-height:1.4}}
