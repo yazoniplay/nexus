@@ -168,7 +168,7 @@ $("modeToggle").addEventListener("click",()=>{
  button.setAttribute("aria-pressed",String(buildMode));
  button.textContent=buildMode?"🛠 Build mode":"💬 Chat mode";
  $("chatInput").placeholder=buildMode?"Describe what you want Nexus to implement in the selected repository…":"Message Nexus…";
- $("composerHint").textContent=buildMode?"Build mode generates complete file contents; select a repository first.":"Enter to send · Shift + Enter for a new line";
+ $("composerHint").textContent=buildMode?"Build mode coordinates the AI team, commits changes to a new GitHub branch, and opens a pull request. Select a repository first.":"Enter to send · Shift + Enter for a new line";
 });
 function resizeInput(){const el=$("chatInput");el.style.height="auto";el.style.height=Math.min(el.scrollHeight,220)+"px";}
 function openSidebar(){$("sidebar").classList.add("open");$("mobileScrim").classList.add("show");}
