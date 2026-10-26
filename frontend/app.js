@@ -8,6 +8,9 @@ const providers = [
 let backendHealthy = false;
 let providerStatus = {};
 let currentView = "overview";
+let githubConnected = false;
+let githubConfigured = false;
+let githubLogin = "";
 
 const $ = (id) => document.getElementById(id);
 const escapeHTML = (value) => String(value).replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
@@ -87,6 +90,7 @@ async function refreshStatus() {
     $("systemStatus").previousElementSibling.classList.remove("good");
   }
   renderProviders();
+  await refreshGithubConnection();
 }
 async function submitChat(message) {
   if (!message.trim()) return;
@@ -106,7 +110,7 @@ async function submitChat(message) {
   box.appendChild(status);
   box.scrollTop = box.scrollHeight;
   try {
-    const response = await fetch(NEXUS_API_BASE + "/api/chat", {method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({message,mode:"discuss"})});
+    const response = await fetch(NEXUS_API_BASE + "/api/chat", {method:"POST",headers:{"Content-Type":"application/json"},credentials:"include",body:JSON.stringify({message,mode:"discuss",repository:$("chatRepository")?.value || null})});
     const data = await response.json();
     if (!response.ok) throw new Error(data.detail || "Chat request failed");
     status.textContent = data.message || "No final response returned.";
@@ -157,7 +161,7 @@ $("refreshButton").addEventListener("click", refreshStatus);
 $("reloadRepos").addEventListener("click", async () => {
   if (!backendHealthy) return toast("Start the backend to load repositories.", "error");
   try {
-    const response = await fetch(NEXUS_API_BASE + "/api/github/repositories");
+    const response = await fetch(NEXUS_API_BASE + "/api/github/repositories", {credentials:"include"});
     const data = await response.json();
     if (!response.ok) throw new Error(data.detail || "Could not load repositories");
     const repos = data.repositories || [];
@@ -167,9 +171,59 @@ $("reloadRepos").addEventListener("click", async () => {
     $("repoGrid").innerHTML = repos.map(repo => '<article class="repo-card"><h3>'+escapeHTML(repo.full_name || repo.name)+'</h3><p>'+escapeHTML(repo.description || "No description")+'</p><span class="setting-value">'+escapeHTML(repo.private?"PRIVATE":"PUBLIC")+'</span></article>').join("");
   } catch (err) { toast(err.message || "Could not load repositories.", "error"); }
 });
-function connectGithub() { toast("GitHub App OAuth is not implemented yet. The repository integration must be configured server-side before access is granted.", "error"); }
+async function refreshGithubConnection() {
+  try {
+    const response = await fetch(NEXUS_API_BASE + "/api/github/connection", {credentials:"include", signal:AbortSignal.timeout(4000)});
+    const data = await response.json();
+    githubConnected = Boolean(response.ok && data.connected);
+    githubConfigured = Boolean(data.configured);
+    githubLogin = data.login || "";
+    $("connectGithubTop").textContent = githubConnected ? "Connected · " + githubLogin : "Connect GitHub ↗";
+    $("connectGithubMain").textContent = githubConnected ? "GitHub connected: " + githubLogin : "Connect GitHub";
+    $("githubAccountLabel").textContent = githubConnected ? "Connected as " + githubLogin : "No GitHub account connected.";
+    if (githubConnected) loadRepositories();
+  } catch {
+    githubConnected = false;
+    githubLogin = "";
+  }
+}
+async function loadRepositories() {
+  if (!backendHealthy || !githubConnected) return;
+  try {
+    const response = await fetch(NEXUS_API_BASE + "/api/github/repositories", {credentials:"include"});
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.detail || "Could not load repositories");
+    const repos = data.repositories || [];
+    $("repoCount").textContent = String(repos.length);
+    $("repoSubtext").textContent = repos.length + " repositories accessible to " + githubLogin + ".";
+    $("chatRepository").innerHTML = '<option value="">No repository selected</option>' + repos.map(repo => '<option value="' + escapeHTML(repo.full_name) + '">' + escapeHTML(repo.full_name) + '</option>').join("");
+    $("repoEmpty").style.display = repos.length ? "none" : "block";
+    $("repoGrid").innerHTML = repos.map(repo => '<article class="repo-card"><h3>'+escapeHTML(repo.full_name || repo.name)+'</h3><p>'+escapeHTML(repo.description || "No description")+'</p><span class="setting-value">'+escapeHTML(repo.private?"PRIVATE":"PUBLIC")+'</span><a href="'+escapeHTML(repo.html_url || "#")+'" target="_blank" rel="noopener noreferrer">Open repository ↗</a></article>').join("");
+  } catch (err) { toast(err.message || "Could not load repositories.", "error"); }
+}
+function connectGithub() {
+  if (!backendHealthy) return toast("Start the Nexus backend first.", "error");
+  if (!githubConfigured) return toast("GitHub OAuth is not configured on the backend yet. Follow the GitHub setup section in the repository README.", "error");
+  window.location.href = NEXUS_API_BASE + "/api/github/connect";
+}
 $("connectGithubTop").addEventListener("click", connectGithub);
 $("connectGithubMain").addEventListener("click", connectGithub);
+$("disconnectGithub").addEventListener("click", async () => {
+  try {
+    const response = await fetch(NEXUS_API_BASE + "/api/github/disconnect", {method:"POST",credentials:"include"});
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.detail || "Disconnect failed");
+    githubConnected = false;
+    githubLogin = "";
+    $("connectGithubTop").textContent = "Connect GitHub ↗";
+    $("connectGithubMain").textContent = "Connect GitHub";
+    $("githubAccountLabel").textContent = "No GitHub account connected.";
+    $("repoCount").textContent = "0";
+    $("repoGrid").innerHTML = "";
+    $("repoEmpty").style.display = "block";
+    toast("GitHub disconnected.");
+  } catch (err) { toast(err.message || "Could not disconnect GitHub.", "error"); }
+});
 $("startTask").addEventListener("click", async () => {
   const message = $("quickTask").value.trim();
   if (!message) return toast("Describe the outcome you want first.", "error");
