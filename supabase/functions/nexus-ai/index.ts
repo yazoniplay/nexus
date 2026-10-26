@@ -2,10 +2,15 @@ import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 
 const cors = {"Access-Control-Allow-Origin":"*","Access-Control-Allow-Headers":"authorization, apikey, content-type, x-client-info","Access-Control-Allow-Methods":"POST, OPTIONS","Content-Type":"application/json"};
 const json = (status:number, body:unknown) => new Response(JSON.stringify(body),{status,headers:cors});
-type P = "openai"|"gemini"|"ollama";
-const all:P[] = ["openai","gemini","ollama"];
-const defaults:Record<P,string> = {openai:"gpt-4.1-mini",gemini:"gemini-3.5-flash-lite",ollama:"gemma4:31b"};
-const key = (p:P) => p==="openai" ? Deno.env.get("OPENAI_API_KEY")||Deno.env.get("CHATGPT_API_KEY")||"" : p==="gemini" ? Deno.env.get("GEMINI_API_KEY")||Deno.env.get("GOOGLE_API_KEY")||"" : Deno.env.get("OLLAMA_API_KEY")||"";
+type P = "openai"|"gemini"|"ollama"|"deepseek"|"qwen"|"grok";
+const all:P[] = ["openai","gemini","ollama","deepseek","qwen","grok"];
+const defaults:Record<P,string> = {openai:"gpt-4.1-mini",gemini:"gemini-3.5-flash-lite",ollama:"gemma4:31b",deepseek:"deepseek-chat",qwen:"qwen-plus",grok:"grok-3-mini"};
+const key = (p:P) => {
+ const names:Record<P,string[]> = {openai:["OPENAI_API_KEY","CHATGPT_API_KEY"],gemini:["GEMINI_API_KEY","GOOGLE_API_KEY"],ollama:["OLLAMA_API_KEY"],deepseek:["DEEPSEEK_API_KEY"],qwen:["QWEN_API_KEY","DASHSCOPE_API_KEY"],grok:["GROK_API_KEY","XAI_API_KEY"]};
+ return names[p].map(n=>Deno.env.get(n)||"").find(Boolean)||"";
+};
+const compatible = (p:P) => p==="openai"||p==="deepseek"||p==="qwen"||p==="grok";
+const apiBase = (p:P) => p==="deepseek"?"https://api.deepseek.com":p==="qwen"?"https://dashscope-intl.aliyuncs.com/compatible-mode/v1":p==="grok"?"https://api.x.ai/v1":"https://api.openai.com/v1";
 const model = (p:P) => Deno.env.get(p.toUpperCase()+"_MODEL")||defaults[p];
 const recent = new Map<string,number[]>();
 const githubToken=()=>Deno.env.get("GITHUB_TOKEN")||"";
@@ -50,12 +55,12 @@ function rateLimited(req:Request){const ip=req.headers.get("x-forwarded-for")?.s
 async function generate(p:P,prompt:string,system="You are an assistant in Nexus. Be concise, accurate, and useful.",maxTokens=900) {
  const k=key(p);if(!k)throw new Error("No API credential configured for "+p+".");
  const m=model(p);let url="",headers:Record<string,string>={"Content-Type":"application/json"},body:unknown;
- if(p==="openai"){url="https://api.openai.com/v1/chat/completions";headers.Authorization="Bearer "+k;body={model:m,max_tokens:maxTokens,messages:[{role:"system",content:system},{role:"user",content:prompt}]};}
+ if(compatible(p)){url=apiBase(p)+"/chat/completions";headers.Authorization="Bearer "+k;body={model:m,max_tokens:maxTokens,messages:[{role:"system",content:system},{role:"user",content:prompt}]};}
  else if(p==="gemini"){url="https://generativelanguage.googleapis.com/v1beta/models/"+encodeURIComponent(m)+":generateContent";headers["x-goog-api-key"]=k;body={systemInstruction:{parts:[{text:system}]},contents:[{role:"user",parts:[{text:prompt}]}],generationConfig:{maxOutputTokens:maxTokens}};}
  else {url=(Deno.env.get("OLLAMA_BASE_URL")||"https://ollama.com/api").replace(/\/$/,"")+"/chat";headers.Authorization="Bearer "+k;body={model:m,stream:false,messages:[{role:"system",content:system},{role:"user",content:prompt}],options:{num_predict:maxTokens}};}
  const res=await fetch(url,{method:"POST",headers,body:JSON.stringify(body),signal:AbortSignal.timeout(45000)});const d=await res.json().catch(()=>({}));
  if(!res.ok)throw new Error(p+" HTTP "+res.status+": "+String(d?.error?.message||d?.error||d?.message||"request failed").slice(0,240));
- const text=p==="openai"?d?.choices?.[0]?.message?.content||"":p==="gemini"?(d?.candidates?.[0]?.content?.parts||[]).map((x:any)=>x.text||"").join("\n"):d?.message?.content||"";
+ const text=compatible(p)?d?.choices?.[0]?.message?.content||"":p==="gemini"?(d?.candidates?.[0]?.content?.parts||[]).map((x:any)=>x.text||"").join("\n"):d?.message?.content||"";
  if(!String(text).trim())throw new Error(p+" returned an empty response.");
  return {provider:p,model:m,text:String(text).trim()};
 }
