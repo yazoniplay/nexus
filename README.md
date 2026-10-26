@@ -26,7 +26,7 @@ pip install -r requirements.txt
 uvicorn main:app --reload
 ```
 
-The API runs at `http://127.0.0.1:8000`; API docs are at `/docs`.
+The API runs at `http://127.0.0.1:8000`; API docs are at `/docs`. The backend is currently a local development API; do not expose it publicly until app authentication, rate limiting, and production secret management are configured.
 
 In a second terminal, serve the frontend instead of opening it as a `file://` URL:
 
