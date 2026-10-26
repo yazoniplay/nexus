@@ -17,6 +17,7 @@ from pydantic import BaseModel, Field
 
 import providers
 from github_oauth import configure_github_routes, github_is_configured, github_repository_context
+from supabase_github import GitHubFunctionError, invoke_github
 
 app = FastAPI(
     title="Nexus API",
@@ -134,7 +135,38 @@ async def _call_agent(provider: str, message: str, mode: str) -> dict:
     )
 
 
+
 configure_github_routes(app)
+
+
+class GitHubActionRequest(BaseModel):
+    action: Literal[
+        "list_repos", "get_repository", "get_contents_tree", "read_file",
+        "list_branches", "list_issues", "list_pull_requests", "list_workflows",
+        "list_workflow_runs", "list_commits", "create_branch", "put_file",
+        "delete_file", "create_pull_request", "create_issue", "comment_issue",
+        "close_issue", "close_pull_request", "merge_pull_request",
+        "dispatch_workflow", "rerun_workflow", "cancel_workflow_run",
+        "delete_branch", "list_releases", "create_release", "update_issue",
+        "add_issue_labels", "list_pr_reviews", "comment_pull_request",
+        "submit_pull_request_review",
+    ]
+    payload: dict = Field(default_factory=dict)
+
+
+@app.post("/api/github/actions")
+async def github_action(request: GitHubActionRequest):
+    # Until Nexus has its production user-auth system, keep this route available
+    # only in local development. Never expose this backend publicly in this mode.
+    if os.getenv("APP_ENV", "development").lower() == "production":
+        raise HTTPException(status_code=503, detail="GitHub actions require the production authentication layer.")
+    try:
+        result = await invoke_github(request.action, **request.payload)
+    except GitHubFunctionError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=str(exc))
+    except (RuntimeError, ValueError) as exc:
+        raise HTTPException(status_code=400, detail=str(exc)[:400])
+    return {"ok": True, "action": request.action, "result": result}
 
 
 @app.post("/api/chat")
