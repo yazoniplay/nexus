@@ -1,0 +1,25 @@
+name: Nexus background automation
+on:
+  schedule:
+    - cron: "*/5 * * * *"
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  tick:
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - name: Trigger due Nexus automation jobs
+        env:
+          AUTOMATION_URL: ${{ secrets.NEXUS_AUTOMATION_URL }}
+          AUTOMATION_SECRET: ${{ secrets.NEXUS_AUTOMATION_SECRET }}
+        run: |
+          set -eu
+          test -n "$AUTOMATION_URL" || { echo "Missing NEXUS_AUTOMATION_URL repository secret"; exit 1; }
+          test -n "$AUTOMATION_SECRET" || { echo "Missing NEXUS_AUTOMATION_SECRET repository secret"; exit 1; }
+          curl --fail-with-body --silent --show-error --max-time 90 \
+            -X POST "$AUTOMATION_URL" \
+            -H "Content-Type: application/json" \
+            -H "x-automation-secret: $AUTOMATION_SECRET" \
+            --data '{"action":"tick"}'
