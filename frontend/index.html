@@ -16,6 +16,11 @@
         <button class="icon-btn mobile-close" id="closeSidebar" aria-label="Close sidebar">×</button>
       </div>
       <button class="new-chat" id="newChat"><span>＋</span> New chat</button>
+      <section class="repo-picker">
+        <div class="repo-picker-heading"><span>GITHUB REPOSITORY</span><button class="repo-refresh" id="refreshRepos" type="button" title="Refresh repositories" aria-label="Refresh repositories">↻</button></div>
+        <select id="repoSelect" aria-label="Choose a GitHub repository"><option value="">No repository selected</option></select>
+        <div id="repoHint" class="repo-hint">Choose a repo to let AIs inspect its code.</div>
+      </section>
       <div class="side-section-title">YOUR CHATS</div>
       <div class="chat-history" id="chatHistory"></div>
       <div class="side-bottom">
