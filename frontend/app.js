@@ -2,7 +2,8 @@ const NEXUS_AI_URL="https://kuvyaytptnghopqbykab.supabase.co/functions/v1/nexus-
 const $=id=>document.getElementById(id);
 const PROVIDERS=[
  {id:"gemini",name:"Gemini",letter:"G"},
- {id:"ollama",name:"Ollama Cloud",letter:"◎"},
+ {id:"gemma4",name:"Gemma 4",letter:"G"},
+ {id:"qwen_ollama",name:"Qwen (Ollama)",letter:"Q"},
  {id:"deepseek",name:"DeepSeek",letter:"D"}
 ];
 const STORAGE_KEY="nexus.chats.v2";
