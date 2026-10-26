@@ -1,249 +1,116 @@
-const NEXUS_API_BASE = window.NEXUS_API_BASE || "http://127.0.0.1:8000";
-const NEXUS_AI_URL = "https://kuvyaytptnghopqbykab.supabase.co/functions/v1/nexus-ai";
-let aiHealthy = false;
-async function nexusAI(payload) {
-  const response = await fetch(NEXUS_AI_URL, {method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(payload)});
-  const data = await response.json().catch(() => ({}));
-  if (!response.ok) throw new Error(data.error || data.message || "Nexus AI request failed (" + response.status + ")");
-  return data;
-}
-const providers = [
-  {id:"anthropic",name:"Claude",modelLabel:"Anthropic API",letter:"C",className:"claude",description:"Engineering, implementation, and code review."},
-  {id:"openai",name:"ChatGPT",modelLabel:"OpenAI API",letter:"O",className:"openai",description:"Planning, orchestration, and reasoning."},
-  {id:"gemini",name:"Gemini",modelLabel:"Google AI API",letter:"G",className:"gemini",description:"Research, analysis, and independent review."},
-  {id:"ollama",name:"Ollama Cloud",modelLabel:"Hosted Ollama API",letter:"◎",className:"ollama",description:"Additional hosted models for analysis and coding."}
+const NEXUS_AI_URL="https://kuvyaytptnghopqbykab.supabase.co/functions/v1/nexus-ai";
+const $=id=>document.getElementById(id);
+const PROVIDERS=[
+ {id:"openai",name:"ChatGPT",letter:"O"},
+ {id:"gemini",name:"Gemini",letter:"G"},
+ {id:"ollama",name:"Ollama Cloud",letter:"◎"},
+ {id:"anthropic",name:"Claude",letter:"C"}
 ];
-let backendHealthy = false;
-let providerStatus = {};
-let currentView = "overview";
-let githubConnected = false;
-let githubConfigured = false;
-let githubLogin = "";
-
-const $ = (id) => document.getElementById(id);
-const escapeHTML = (value) => String(value).replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
-async function githubAction(action, payload={}) {
-  const response = await fetch(NEXUS_API_BASE + "/api/github/actions", {
-    method:"POST",
-    headers:{"Content-Type":"application/json"},
-    body:JSON.stringify({action, payload})
-  });
-  const data = await response.json();
-  if (!response.ok) throw new Error(data.detail || data.error || "GitHub action failed");
-  return data.result;
+const STORAGE_KEY="nexus.chats.v2";
+let providerStatus={};
+let chats=[];
+let activeChatId=null;
+let sending=false;
+const uid=()=>Date.now().toString(36)+Math.random().toString(36).slice(2,8);
+const escapeHTML=s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+function toast(message,error=false){const el=document.createElement("div");el.className="toast"+(error?" error":"");el.textContent=message;$("toastRegion").appendChild(el);setTimeout(()=>el.remove(),4500);}
+function activeChat(){return chats.find(c=>c.id===activeChatId)||null;}
+function saveChats(){try{localStorage.setItem(STORAGE_KEY,JSON.stringify(chats));}catch{}}
+function loadChats(){try{const saved=JSON.parse(localStorage.getItem(STORAGE_KEY)||"[]");if(Array.isArray(saved))chats=saved.filter(c=>c&&c.id&&Array.isArray(c.messages));}catch{chats=[];}if(chats.length){activeChatId=chats[0].id;}renderHistory();renderMessages();}
+function renderHistory(){
+ const host=$("chatHistory");
+ if(!chats.length){host.innerHTML='<div class="history-empty">Your conversations will appear here.</div>';return;}
+ host.innerHTML=chats.map(c=>'<button class="history-item '+(c.id===activeChatId?"active":"")+'" data-chat-id="'+escapeHTML(c.id)+'"><span class="history-icon">◷</span><span>'+escapeHTML(c.title||"New chat")+'</span></button>').join("");
+ host.querySelectorAll("[data-chat-id]").forEach(btn=>btn.addEventListener("click",()=>{activeChatId=btn.dataset.chatId;renderHistory();renderMessages();closeSidebar();}));
 }
-function toast(message, type="") {
-  const el = document.createElement("div");
-  el.className = "toast " + type;
-  el.textContent = message;
-  $("toastRegion").appendChild(el);
-  window.setTimeout(() => el.remove(), 4200);
+function renderProviders(){
+ const list=PROVIDERS.map(p=>{
+   const configured=Boolean(providerStatus[p.id]?.configured);
+   const label=configured?"Connected":"Not set up";
+   return '<div class="provider-mini"><span class="provider-letter">'+p.letter+'</span><span class="provider-name">'+p.name+'</span><span class="provider-state '+(configured?"online":"")+'">'+label+'</span></div>';
+ }).join("");
+ $("sidebarProviders").innerHTML=list;
+ $("welcomeProviders").innerHTML=PROVIDERS.filter(p=>providerStatus[p.id]?.configured).map(p=>'<span class="ai-pill"><span class="provider-letter">'+p.letter+'</span>'+p.name+'<i class="pill-dot online"></i></span>').join("");
+ const count=PROVIDERS.filter(p=>providerStatus[p.id]?.configured).length;
+ $("connectionText").textContent=count?count+" AI"+(count===1?"":"s")+" connected":"No AIs connected";
+ $("connectionDot").className=count?"online":"offline";
 }
-function goTo(view) {
-  currentView = view;
-  document.querySelectorAll(".view").forEach(el => el.classList.toggle("active-view", el.id === "view-" + view));
-  document.querySelectorAll(".nav-item").forEach(el => el.classList.toggle("active", el.dataset.view === view));
-  const active = document.querySelector('[data-view="' + view + '"]');
-  $("pageName").textContent = active ? active.textContent.trim() : ({overview:"Overview",chat:"AI team chat",projects:"Repositories",workflows:"Workflows",activity:"Activity log",providers:"AI providers",settings:"Settings"}[view] || "Overview");
-  if (view === "providers") renderProviderSettings();
-  if (view === "chat") renderParticipants();
-  window.scrollTo({top:0,behavior:matchMedia("(prefers-reduced-motion: reduce)").matches?"auto":"smooth"});
+async function refreshStatus(){
+ $("connectionText").textContent="Checking AIs…";$("connectionDot").className="";
+ try{const r=await fetch(NEXUS_AI_URL,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({action:"status"})});const data=await r.json().catch(()=>({}));if(!r.ok)throw new Error(data.error||"Status request failed");providerStatus=data.providers||{};renderProviders();}
+ catch(e){providerStatus={};renderProviders();$("connectionText").textContent="AI gateway unavailable";$("connectionDot").className="offline";toast(e.message||"Could not reach the AI gateway.",true);}
 }
-function providerRow(p, compact=false) {
-  const connected = Boolean(providerStatus[p.id]?.configured);
-  const label = connected ? "Configured" : "Not configured";
-  return '<div class="provider-row"><div class="provider-logo '+p.className+'">'+p.letter+'</div><div class="provider-info"><strong>'+p.name+'</strong><small>'+p.modelLabel+'</small></div><div class="provider-status"><span class="status-dot '+(connected?"good":"neutral")+'"></span>'+label+'</div></div>';
+function newChat(){
+ const c={id:uid(),title:"New chat",createdAt:Date.now(),messages:[]};
+ chats.unshift(c);activeChatId=c.id;saveChats();renderHistory();renderMessages();$("chatInput").focus();closeSidebar();
 }
-function renderProviders() {
-  $("providerList").innerHTML = providers.map(p => providerRow(p)).join("");
-  const connected = providers.filter(p => providerStatus[p.id]?.configured).length;
-  $("providerCount").innerHTML = connected + '<span class="stat-unit"> / 4</span>';
-  $("setupTitle").textContent = connected ? connected + " provider(s) configured" : "Set up your workspace";
-  $("setupDescription").textContent = connected ? "Provider credentials are configured on the backend. Run a connection test before using an agent." : "Connect the backend and configure provider credentials to start real AI conversations. This UI does not simulate connected services.";
-  renderProviderSettings();
-  renderParticipants();
+function renderMessages(){
+ const c=activeChat();const host=$("messages");const welcome=$("welcome");
+ if(!c||!c.messages.length){welcome.hidden=false;host.innerHTML="";return;}
+ welcome.hidden=true;
+ host.innerHTML=c.messages.map(m=>{
+   if(m.role==="user")return '<article class="message user"><div class="message-content">'+escapeHTML(m.text)+'</div></article>';
+   const p=PROVIDERS.find(x=>x.id===m.provider);
+   const name=m.name||(p?p.name:(m.provider||"AI"));
+   return '<article class="message '+(m.error?"error":"")+'"><div class="message-avatar">'+escapeHTML(p?.letter||name.slice(0,1).toUpperCase())+'</div><div class="message-content"><div class="message-label">'+escapeHTML(name)+' <span class="message-model">'+escapeHTML(m.model||"")+'</span></div><div class="message-text">'+formatText(m.text||"No response returned.")+'</div></div></article>';
+ }).join("");
+ scrollBottom();
 }
-function renderProviderSettings() {
-  if (!$("providerSettings")) return;
-  $("providerSettings").innerHTML = providers.map(p => {
-    const configured = Boolean(providerStatus[p.id]?.configured);
-    const extra = p.id === "ollama" ? "Uses Ollama Cloud's hosted API. Add OLLAMA_API_KEY on the backend; no local Ollama installation is required." : p.description;
-    return '<article class="provider-setting"><div class="provider-setting-head"><div class="provider-logo '+p.className+'">'+p.letter+'</div><div><h3>'+p.name+'</h3><p>'+p.modelLabel+'</p></div></div><p>'+extra+'</p><div class="setting-bottom"><span class="setting-value">'+(configured?"KEY CONFIGURED":"KEY NOT CONFIGURED")+'</span><button class="subtle-button test-provider" data-provider="'+p.id+'" '+(!aiHealthy||!configured?"disabled":"")+'>'+(configured?"Test connection":"Setup required")+'</button></div></article>';
-  }).join("");
-  document.querySelectorAll(".test-provider").forEach(btn => btn.addEventListener("click", async () => {
-    try {
-      const data = await nexusAI({action:"test",provider:btn.dataset.provider});
-      toast(data.message || "Provider connection verified.");
-    } catch (err) { toast(err.message || "Provider test failed.", "error"); }
-  }));
+function formatText(text){
+ // Escape first; preserve code fences and simple paragraphs without interpreting model output as HTML.
+ const safe=escapeHTML(text);
+ return safe.split(/\n{2,}/).map(part=>{
+   if(part.startsWith("```")&&part.endsWith("```")){
+     const code=part.replace(/^```[^\n]*\n?/,"").replace(/\n?```$/,"");
+     return "<pre><code>"+code+"</code></pre>";
+   }
+   return "<p>"+part.replace(/\n/g,"<br>")+"</p>";
+ }).join("");
 }
-function renderParticipants() {
-  if (!$("chatParticipants")) return;
-  $("chatParticipants").innerHTML = providers.map(p => providerRow(p, true)).join("");
+function scrollBottom(){const sc=$("chatScroll");requestAnimationFrame(()=>{sc.scrollTop=sc.scrollHeight;});}
+function setSending(value){sending=value;$("sendButton").disabled=value;$("chatInput").disabled=value;$("composerHint").textContent=value?"Waiting for every configured AI…":"Enter to send · Shift + Enter for a new line";}
+function appendMessage(message){const c=activeChat();if(!c)return;c.messages.push(message);saveChats();renderHistory();renderMessages();}
+function titleFrom(text){const t=text.replace(/\s+/g," ").trim();return t.length>36?t.slice(0,36).trim()+"…":t||"New chat";}
+async function sendMessage(raw){
+ const text=raw.trim();if(!text||sending)return;
+ if(!activeChat())newChat();
+ const chat=activeChat();
+ if(!chat.messages.some(m=>m.role==="user"))chat.title=titleFrom(text);
+ appendMessage({id:uid(),role:"user",text,at:Date.now()});
+ $("chatInput").value="";resizeInput();setSending(true);
+ const pending=document.createElement("article");pending.className="message";pending.id="pendingMessage";
+ pending.innerHTML='<div class="message-avatar">N</div><div class="message-content"><div class="message-label">Nexus <span class="message-model">Waiting for responses</span></div><div class="loading-dots" aria-label="AI models are responding"><i></i><i></i><i></i></div></div>';
+ $("messages").appendChild(pending);$("welcome").hidden=true;scrollBottom();
+ try{
+   const r=await fetch(NEXUS_AI_URL,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({action:"chat",message:text})});
+   const data=await r.json().catch(()=>({}));
+   if(!r.ok)throw new Error(data.error||data.message||"AI request failed ("+r.status+")");
+   const responses=Array.isArray(data.responses)?data.responses:[];
+   if(responses.length){
+     // Show every model's response inline. No details element, disclosure button, or extra click.
+     responses.forEach(item=>appendMessage({id:uid(),role:"assistant",provider:item.provider,model:item.model,text:item.text||"No response text returned.",error:Boolean(item.error),at:Date.now()}));
+   }else if(data.message){
+     appendMessage({id:uid(),role:"assistant",provider:"nexus",name:"Nexus",text:data.message,at:Date.now()});
+   }else throw new Error("The gateway returned no AI responses.");
+   const failed=responses.filter(x=>x.error);
+   if(failed.length)toast(failed.length+" AI provider(s) failed. Successful responses are shown.",true);
+   providerStatus=providerStatus||{};renderProviders();
+ }catch(e){
+   appendMessage({id:uid(),role:"assistant",provider:"nexus",name:"Nexus",text:"Message failed: "+(e.message||"Unknown error"),error:true,at:Date.now()});
+ }finally{
+   $("pendingMessage")?.remove();setSending(false);renderHistory();renderMessages();$("chatInput").focus();
+ }
 }
-async function refreshStatus() {
-  $("connectionText").textContent = "Checking AI gateway…";
-  try {
-    const data = await nexusAI({action:"status"});
-    aiHealthy = true;
-    providerStatus = data.providers || {};
-    $("connectionText").textContent = "AI gateway connected";
-    $("connectionText").previousElementSibling.classList.add("good");
-    $("systemStatus").textContent = "AI gateway connected";
-    $("systemStatus").previousElementSibling.classList.add("good");
-  } catch (err) {
-    aiHealthy = false;
-    providerStatus = {};
-    $("connectionText").textContent = "AI gateway offline";
-    $("connectionText").previousElementSibling.classList.remove("good");
-    $("systemStatus").textContent = "AI gateway offline";
-    $("systemStatus").previousElementSibling.classList.remove("good");
-    toast(err.message || "Could not connect to the Nexus AI gateway.", "error");
-  }
-  try {
-    const response = await fetch(NEXUS_API_BASE + "/api/status", {signal:AbortSignal.timeout(1800)});
-    if (!response.ok) throw new Error("Local backend unavailable");
-    const data = await response.json();
-    backendHealthy = true;
-    $("repoCount").textContent = String(data.repository_count ?? 0);
-    $("runCount").textContent = String(data.active_runs ?? 0);
-    $("attentionCount").textContent = String(data.attention_count ?? 0);
-    $("repoSubtext").textContent = (data.repository_count ?? 0) + " connected repository connections.";
-  } catch {
-    backendHealthy = false;
-    $("repoSubtext").textContent = "AI chat works through Supabase; local GitHub/workflow backend is offline.";
-  }
-  renderProviders();
-  await refreshGithubConnection();
-}
-async function submitChat(message) {
-  if (!message.trim()) return;
-  if (!aiHealthy) { toast("Nexus AI gateway is offline. Refresh and try again.", "error"); return; }
-  const box = $("chatMessages");
-  const empty = box.querySelector(".empty-chat");
-  if (empty) empty.remove();
-  const user = document.createElement("div");
-  user.className = "message-bubble user-message";
-  user.style.cssText = "max-width:90%;margin:0 0 16px auto;padding:12px 14px;border:1px solid #34402a;background:#1b2118;border-radius:12px;color:#eaf3df;font-size:12px;white-space:pre-wrap";
-  user.textContent = message;
-  box.appendChild(user);
-  const status = document.createElement("div");
-  status.className = "message-bubble";
-  status.style.cssText = "padding:12px 14px;margin-bottom:15px;border:1px solid #2d3340;background:#151923;border-radius:12px;color:#aab3c3;font-size:11px";
-  status.textContent = "Submitting to the orchestrator…";
-  box.appendChild(status);
-  box.scrollTop = box.scrollHeight;
-  try {
-    const data = await nexusAI({action:"chat",message,repository:$("chatRepository")?.value || null,mode:"discuss"});
-    status.textContent = data.message || "No final response returned.";
-    status.style.whiteSpace = "pre-wrap";
-    status.style.lineHeight = "1.6";
-    status.style.color = "#e7ebf3";
-    if (Array.isArray(data.responses) && data.responses.length) {
-      const summary = document.createElement("div");
-      summary.textContent = "Independent agent responses · " + data.responses.length;
-      summary.style.cssText = "font-size:10px;text-transform:uppercase;letter-spacing:.08em;color:#8995aa;margin:16px 0 8px";
-      box.appendChild(summary);
-      data.responses.forEach(item => {
-        const card = document.createElement("details");
-        card.style.cssText = "margin:8px 0 10px;padding:10px 12px;border:1px solid #2d3340;background:#11151d;border-radius:10px;color:#cbd3e1;font-size:12px";
-        const heading = document.createElement("summary");
-        heading.style.cssText = "cursor:pointer;color:#e5eaf3;font-weight:600";
-        heading.textContent = (item.provider || "AI agent").toUpperCase() + " · " + (item.model || "model");
-        const body = document.createElement("div");
-        body.style.cssText = "padding-top:10px;white-space:pre-wrap;line-height:1.6;overflow-wrap:anywhere";
-        body.textContent = item.text || "No response text.";
-        card.append(heading, body);
-        box.appendChild(card);
-      });
-    }
-    if (Array.isArray(data.failed) && data.failed.length) {
-      const warning = document.createElement("div");
-      warning.style.cssText = "margin:8px 0;padding:10px;border:1px solid #62413f;border-radius:9px;color:#e7b6ad;font-size:11px";
-      warning.textContent = data.failed.length + " provider or synthesis operation(s) failed. Some responses may be missing.";
-      box.appendChild(warning);
-    }
-    if (data.execution_note) {
-      const note = document.createElement("div");
-      note.style.cssText = "margin-top:10px;color:#d6b980;font-size:11px";
-      note.textContent = data.execution_note;
-      box.appendChild(note);
-    }
-    box.scrollTop = box.scrollHeight;
-  } catch (err) {
-    status.textContent = "Not sent: " + (err.message || "request failed");
-    status.style.borderColor = "#62413f";
-  }
-  $("chatInput").value = "";
-}
-document.querySelectorAll("[data-view]").forEach(btn => btn.addEventListener("click", () => goTo(btn.dataset.view)));
-document.querySelectorAll("[data-go]").forEach(btn => btn.addEventListener("click", () => goTo(btn.dataset.go)));
-$("newChat").addEventListener("click", () => { goTo("chat"); $("chatTitle").textContent = "New team discussion"; $("chatInput").focus(); });
-$("refreshButton").addEventListener("click", refreshStatus);
-$("reloadRepos").addEventListener("click", async () => {
-  if (!backendHealthy) return toast("Start the backend to load repositories.", "error");
-  try {
-    const response = await fetch(NEXUS_API_BASE + "/api/github/repositories", {credentials:"include"});
-    const data = await response.json();
-    if (!response.ok) throw new Error(data.detail || "Could not load repositories");
-    const repos = data.repositories || [];
-    $("repoCount").textContent = String(repos.length);
-    $("repoSubtext").textContent = repos.length + " repositories returned by the connected GitHub integration.";
-    $("repoEmpty").style.display = repos.length ? "none" : "block";
-    $("repoGrid").innerHTML = repos.map(repo => '<article class="repo-card"><h3>'+escapeHTML(repo.full_name || repo.name)+'</h3><p>'+escapeHTML(repo.description || "No description")+'</p><span class="setting-value">'+escapeHTML(repo.private?"PRIVATE":"PUBLIC")+'</span></article>').join("");
-  } catch (err) { toast(err.message || "Could not load repositories.", "error"); }
-});
-async function refreshGithubConnection() {
-  try {
-    await githubAction("list_repos");
-    githubConnected = true;
-    githubConfigured = true;
-    githubLogin = "Supabase PAT";
-    $("connectGithubTop").textContent = "GitHub · Supabase PAT";
-    $("connectGithubMain").textContent = "GitHub connected through Supabase";
-    $("githubAccountLabel").textContent = "GitHub token is held in Supabase Edge Function secrets.";
-    await loadRepositories();
-  } catch {
-    githubConnected = false;
-    githubConfigured = false;
-    githubLogin = "";
-    $("connectGithubTop").textContent = "GitHub not configured";
-    $("connectGithubMain").textContent = "Configure GitHub PAT in Supabase";
-    $("githubAccountLabel").textContent = "Add GITHUB_TOKEN to Supabase Edge Function secrets and configure backend Supabase credentials.";
-  }
-}
-async function loadRepositories() {
-  if (!backendHealthy) return;
-  try {
-    const data = await githubAction("list_repos");
-    const repos = data.repos || [];
-    $("repoCount").textContent = String(repos.length);
-    $("repoSubtext").textContent = repos.length + " repositories available through the Supabase PAT.";
-    $("chatRepository").innerHTML = '<option value="">No repository selected</option>' + repos.map(repo => '<option value="' + escapeHTML(repo.full_name) + '">' + escapeHTML(repo.full_name) + '</option>').join("");
-    $("repoEmpty").style.display = repos.length ? "none" : "block";
-    $("repoGrid").innerHTML = repos.map(repo => '<article class="repo-card"><h3>'+escapeHTML(repo.full_name || repo.name)+'</h3><p>'+escapeHTML(repo.description || "No description")+'</p><span class="setting-value">'+escapeHTML(repo.private?"PRIVATE":"PUBLIC")+'</span><a href="'+escapeHTML(repo.html_url || "#")+'" target="_blank" rel="noopener noreferrer">Open repository ↗</a></article>').join("");
-  } catch (err) { toast(err.message || "Could not load repositories.", "error"); }
-}
-function connectGithub() {
-  if (!backendHealthy) return toast("Start the Nexus backend first.", "error");
-  refreshGithubConnection().then(() => {
-    if (githubConnected) toast("GitHub actions are available through the Supabase PAT.");
-    else toast("Check GITHUB_TOKEN and backend Supabase credentials.", "error");
-  });
-}
-$("connectGithubTop").addEventListener("click", connectGithub);
-$("connectGithubMain").addEventListener("click", connectGithub);
-$("reloadRepos").addEventListener("click", loadRepositories);
-$("disconnectGithub").addEventListener("click", () => {
-  toast("The GitHub token is stored in Supabase. Remove GITHUB_TOKEN from Edge Function secrets there to disconnect it.");
-});
-$("startTask").addEventListener("click", async () => {
-  const message = $("quickTask").value.trim();
-  if (!message) return toast("Describe the outcome you want first.", "error");
-  if ($("quickMode").value === "build") return toast("Build mode is locked until isolated execution and GitHub permissions are configured.", "error");
-  goTo("chat");
-  await submitChat(message);
-});
-$("chatForm").addEventListener("submit", async e => { e.preventDefault(); await submitChat($("chatInput").value); });
-$("chatInput").addEventListener("keydown", e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); $("chatForm").requestSubmit(); } });
-refreshStatus();
+function resizeInput(){const el=$("chatInput");el.style.height="auto";el.style.height=Math.min(el.scrollHeight,220)+"px";}
+function openSidebar(){$("sidebar").classList.add("open");$("mobileScrim").classList.add("show");}
+function closeSidebar(){$("sidebar").classList.remove("open");$("mobileScrim").classList.remove("show");}
+$("newChat").addEventListener("click",newChat);
+$("chatForm").addEventListener("submit",e=>{e.preventDefault();sendMessage($("chatInput").value);});
+$("chatInput").addEventListener("keydown",e=>{if(e.key==="Enter"&&!e.shiftKey){e.preventDefault();$("chatForm").requestSubmit();}});
+$("chatInput").addEventListener("input",resizeInput);
+$("refreshStatus").addEventListener("click",refreshStatus);
+$("openSidebar").addEventListener("click",openSidebar);
+$("closeSidebar").addEventListener("click",closeSidebar);
+$("mobileScrim").addEventListener("click",closeSidebar);
+window.addEventListener("resize",()=>{if(window.innerWidth>700)closeSidebar();});
+loadChats();refreshStatus();
