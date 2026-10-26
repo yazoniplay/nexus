@@ -55,13 +55,23 @@ def test_github_connection_reports_unconfigured_when_credentials_are_missing(mon
     assert response.json()["configured"] is False
 
 
-def test_chat_repository_context_requires_github_session():
+def test_chat_uses_pat_repository_context_without_oauth_session(monkeypatch):
+    called = {}
+
+    async def fake_repository_context(full_name):
+        called["repository"] = full_name
+        return {"repository": full_name, "default_branch": "main", "root_files": [], "readme": ""}
+
+    monkeypatch.setattr("main.github_pat_repository_context", fake_repository_context)
     response = client.post(
         "/api/chat",
         json={"message": "Review this repository", "repository": "someone/project"},
     )
-    assert response.status_code == 401
-
+    # With repository context loaded, chat proceeds to provider validation.
+    # CI has no model keys, so it should return the expected no-provider response.
+    assert response.status_code == 400
+    assert "No AI providers are configured" in response.json()["detail"]
+    assert called["repository"] == "someone/project"
 
 
 def test_github_actions_are_reported_separately_from_oauth():
