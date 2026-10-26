@@ -140,6 +140,40 @@ async def _call_agent(provider: str, message: str, mode: str) -> dict:
 configure_github_routes(app)
 
 
+async def github_pat_repository_context(full_name: str) -> dict:
+    import re
+    if not re.fullmatch(r"[A-Za-z0-9_.-]{1,100}/[A-Za-z0-9_.-]{1,100}", full_name):
+        raise HTTPException(status_code=400, detail="Repository must use owner/repository format.")
+    owner, repo = full_name.split("/", 1)
+    try:
+        repository_result = await invoke_github("get_repository", owner=owner, repo=repo)
+        repository = repository_result.get("result", {})
+        default_branch = repository.get("default_branch") or "main"
+        tree_result = await invoke_github("get_contents_tree", owner=owner, repo=repo, branch=default_branch)
+        tree = tree_result.get("result", {}).get("tree", [])
+        root_files = [
+            {"path": item.get("path", ""), "type": item.get("type", "")}
+            for item in tree if isinstance(item, dict) and "/" not in str(item.get("path", ""))
+        ][:80]
+        readme = ""
+        try:
+            readme_result = await invoke_github("read_file", owner=owner, repo=repo, path="README.md")
+            readme = str(readme_result.get("content") or "")[:10000]
+        except GitHubFunctionError as exc:
+            if exc.status_code not in (404,):
+                raise
+        return {
+            "repository": repository.get("full_name", full_name),
+            "description": repository.get("description") or "",
+            "default_branch": default_branch,
+            "private": bool(repository.get("private", False)),
+            "root_files": root_files,
+            "readme": readme,
+        }
+    except GitHubFunctionError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=str(exc))
+
+
 class GitHubActionRequest(BaseModel):
     action: Literal[
         "list_repos", "get_repository", "get_contents_tree", "read_file",
@@ -175,7 +209,7 @@ async def chat(http_request: Request, request: ChatRequest):
     agent_message = request.message
     repository_context = None
     if request.repository:
-        repository_context = await github_repository_context(http_request, request.repository)
+        repository_context = await github_pat_repository_context(request.repository)
         # Repository text is untrusted data. It is context for analysis, never executable instructions.
         agent_message = (
             request.message
