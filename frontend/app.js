@@ -1,5 +1,6 @@
 const NEXUS_AI_URL="https://kuvyaytptnghopqbykab.supabase.co/functions/v1/nexus-ai";
 const $=id=>document.getElementById(id);
+function uiIcon(name,size=16){const p={clock:'<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',settings:'<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1-1.7 2.9-.2-.1a1.7 1.7 0 0 0-1.8.2 1.7 1.7 0 0 0-.8 1.5v.2h-3.4v-.2a1.7 1.7 0 0 0-1.1-1.6 1.7 1.7 0 0 0-1.8.2l-.2.1-1.7-2.9.1-.1a1.7 1.7 0 0 0 .3-1.9 1.7 1.7 0 0 0-1.5-1H6v-3.4h.2a1.7 1.7 0 0 0 1.6-1.1 1.7 1.7 0 0 0-.2-1.8l-.1-.2 2.9-1.7.1.1a1.7 1.7 0 0 0 1.9.3 1.7 1.7 0 0 0 1-1.5V4h3.4v.2a1.7 1.7 0 0 0 1.1 1.6 1.7 1.7 0 0 0 1.8-.2l.2-.1 1.7 2.9-.1.1a1.7 1.7 0 0 0-.3 1.9 1.7 1.7 0 0 0 1.5 1h.2v3.4h-.2a1.7 1.7 0 0 0-1.6 1.1z"/>',panel:'<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M9 4v16"/>',refresh:'<path d="M20 7v5h-5M4 17v-5h5"/><path d="M5.5 9A7 7 0 0 1 17 6l3 6M4 12l3 6a7 7 0 0 0 11.5-3"/>',chat:'<path d="M21 11.5a8.4 8.4 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.4 8.4 0 0 1-3.8-.9L3 21l1.9-5.7a8.4 8.4 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.4 8.4 0 0 1 3.8-.9h.5a8.5 8.5 0 0 1 8 8z'},plus:'<path d="M12 5v14M5 12h14"/>'};return '<svg class="ui-icon" aria-hidden="true" width="'+size+'" height="'+size+'" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">'+(p[name]||p.chat)+'</svg>';}
 const PROVIDERS=[
  {id:"gemini",name:"Gemini",letter:"G"},
  {id:"gemma4",name:"Gemma 4",letter:"G"},
@@ -29,7 +30,7 @@ function loadChats(){try{const saved=JSON.parse(localStorage.getItem(STORAGE_KEY
 function renderHistory(){
  const host=$("chatHistory");
  if(!chats.length){host.innerHTML='<div class="history-empty">Your conversations will appear here.</div>';return;}
- host.innerHTML=chats.map(c=>'<div class="history-row"><button class="history-item '+(c.id===activeChatId?"active":"")+'" data-chat-id="'+escapeHTML(c.id)+'"><span class="history-icon">◷</span><span class="history-title">'+escapeHTML(c.title||"New chat")+'</span></button><button class="delete-chat" data-delete-chat="'+escapeHTML(c.id)+'" aria-label="Delete chat" title="Delete chat">×</button></div>').join("");
+ host.innerHTML=chats.map(c=>'<div class="history-row"><button class="history-item '+(c.id===activeChatId?"active":"")+'" data-chat-id="'+escapeHTML(c.id)+'"><span class="history-icon">'+uiIcon("clock",15)+'</span><span class="history-title">'+escapeHTML(c.title||"New chat")+'</span></button><button class="delete-chat" data-delete-chat="'+escapeHTML(c.id)+'" aria-label="Delete chat" title="Delete chat">×</button></div>').join("");
  host.querySelectorAll("[data-chat-id]").forEach(btn=>btn.addEventListener("click",()=>{activeChatId=btn.dataset.chatId;renderHistory();renderMessages();closeSidebar();}));
  host.querySelectorAll("[data-delete-chat]").forEach(btn=>btn.addEventListener("click",e=>{e.stopPropagation();deleteChat(btn.dataset.deleteChat);}));
 }
@@ -209,14 +210,14 @@ function resizeInput(){const el=$("chatInput");el.style.height="auto";el.style.h
 function renderImageAttachments(){const host=$("imageAttachments");if(!host)return;host.hidden=!pendingImages.length;host.innerHTML=pendingImages.map((item,i)=>'<div class="image-attachment"><img src="'+item.dataUrl+'" alt="Image to upload"><button type="button" data-remove-image="'+i+'" aria-label="Remove image">×</button></div>').join("");host.querySelectorAll("[data-remove-image]").forEach(btn=>btn.addEventListener("click",()=>{pendingImages.splice(Number(btn.dataset.removeImage),1);renderImageAttachments();}));}
 $("attachImages").addEventListener("click",()=>{if(sending)return;$("imageInput").click();});
 $("imageInput").addEventListener("change",async e=>{const files=Array.from(e.target.files||[]);for(const file of files){if(pendingImages.length>=MAX_IMAGES){toast("Maximum 4 images per message.",true);break;}if(!["image/jpeg","image/png","image/webp","image/gif"].includes(file.type)){toast("Use JPG, PNG, WEBP or GIF images.",true);continue;}if(file.size>MAX_IMAGE_BYTES){toast(file.name+" is over 500 KB. Please use a smaller image.",true);continue;}try{const dataUrl=await new Promise((resolve,reject)=>{const reader=new FileReader();reader.onload=()=>resolve(String(reader.result));reader.onerror=reject;reader.readAsDataURL(file);});const comma=dataUrl.indexOf(",");pendingImages.push({mimeType:file.type,data:dataUrl.slice(comma+1),dataUrl});}catch{toast("Could not read "+file.name,true);}}e.target.value="";renderImageAttachments();});
-function openSidebar(){$("sidebar").classList.add("open");$("mobileScrim").classList.add("show");}
-function closeSidebar(){$("sidebar").classList.remove("open");$("mobileScrim").classList.remove("show");}
+function openSidebar(){if(window.innerWidth<=700){$("sidebar").classList.add("open");$("mobileScrim").classList.add("show");}else{$("app").classList.remove("sidebar-collapsed");$("openSidebar").setAttribute("aria-expanded","true");$("openSidebar").setAttribute("aria-label","Collapse sidebar");}}
+function closeSidebar(){if(window.innerWidth<=700){$("sidebar").classList.remove("open");$("mobileScrim").classList.remove("show");}else{$("app").classList.add("sidebar-collapsed");$("openSidebar").setAttribute("aria-expanded","false");$("openSidebar").setAttribute("aria-label","Expand sidebar");}}
 $("newChat").addEventListener("click",newChat);
 $("chatForm").addEventListener("submit",e=>{e.preventDefault();sendMessage($("chatInput").value);});
 $("chatInput").addEventListener("keydown",e=>{if(e.key==="Enter"&&!e.shiftKey){e.preventDefault();$("chatForm").requestSubmit();}});
 $("chatInput").addEventListener("input",resizeInput);
 $("refreshStatus").addEventListener("click",refreshStatus);
-$("openSidebar").addEventListener("click",openSidebar);
+$("openSidebar").addEventListener("click",()=>{if(window.innerWidth>700&&$("app").classList.contains("sidebar-collapsed"))openSidebar();else closeSidebar();});
 $("closeSidebar").addEventListener("click",closeSidebar);
 $("mobileScrim").addEventListener("click",closeSidebar);
 window.addEventListener("resize",()=>{if(window.innerWidth>700)closeSidebar();});
