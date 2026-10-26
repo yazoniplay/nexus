@@ -109,7 +109,41 @@ async function submitChat(message) {
     const response = await fetch(NEXUS_API_BASE + "/api/chat", {method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({message,mode:"discuss"})});
     const data = await response.json();
     if (!response.ok) throw new Error(data.detail || "Chat request failed");
-    status.textContent = data.message || "Task accepted. Check workflow status for progress.";
+    status.textContent = data.message || "No final response returned.";
+    status.style.whiteSpace = "pre-wrap";
+    status.style.lineHeight = "1.6";
+    status.style.color = "#e7ebf3";
+    if (Array.isArray(data.responses) && data.responses.length) {
+      const summary = document.createElement("div");
+      summary.textContent = "Independent agent responses · " + data.responses.length;
+      summary.style.cssText = "font-size:10px;text-transform:uppercase;letter-spacing:.08em;color:#8995aa;margin:16px 0 8px";
+      box.appendChild(summary);
+      data.responses.forEach(item => {
+        const card = document.createElement("details");
+        card.style.cssText = "margin:8px 0 10px;padding:10px 12px;border:1px solid #2d3340;background:#11151d;border-radius:10px;color:#cbd3e1;font-size:12px";
+        const heading = document.createElement("summary");
+        heading.style.cssText = "cursor:pointer;color:#e5eaf3;font-weight:600";
+        heading.textContent = (item.provider || "AI agent").toUpperCase() + " · " + (item.model || "model");
+        const body = document.createElement("div");
+        body.style.cssText = "padding-top:10px;white-space:pre-wrap;line-height:1.6;overflow-wrap:anywhere";
+        body.textContent = item.text || "No response text.";
+        card.append(heading, body);
+        box.appendChild(card);
+      });
+    }
+    if (Array.isArray(data.failed) && data.failed.length) {
+      const warning = document.createElement("div");
+      warning.style.cssText = "margin:8px 0;padding:10px;border:1px solid #62413f;border-radius:9px;color:#e7b6ad;font-size:11px";
+      warning.textContent = data.failed.length + " provider or synthesis operation(s) failed. Some responses may be missing.";
+      box.appendChild(warning);
+    }
+    if (data.execution_note) {
+      const note = document.createElement("div");
+      note.style.cssText = "margin-top:10px;color:#d6b980;font-size:11px";
+      note.textContent = data.execution_note;
+      box.appendChild(note);
+    }
+    box.scrollTop = box.scrollHeight;
   } catch (err) {
     status.textContent = "Not sent: " + (err.message || "request failed");
     status.style.borderColor = "#62413f";
