@@ -7,6 +7,9 @@ import time
 import uuid
 from typing import Literal
 
+from dotenv import load_dotenv
+load_dotenv()
+
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
@@ -147,8 +150,14 @@ async def chat(request: ChatRequest):
 
     run_id = str(uuid.uuid4())
     started = time.monotonic()
+    async def safe_agent_call(name: str) -> dict:
+        try:
+            return await _call_agent(name, request.message, request.mode)
+        except Exception as exc:
+            return {"provider": name, "error": str(exc)[:400]}
+
     tasks = [
-        asyncio.create_task(_call_agent(name, request.message, request.mode))
+        asyncio.create_task(safe_agent_call(name))
         for name in selected[:MAX_DISCUSSION_RESPONSES]
     ]
     done, pending = await asyncio.wait(tasks, timeout=DISCUSSION_TIMEOUT_SECONDS)
@@ -158,7 +167,11 @@ async def chat(request: ChatRequest):
     failures: list[dict[str, str]] = []
     for task in done:
         try:
-            results.append(task.result())
+            result = task.result()
+            if result.get("error"):
+                failures.append({"provider": result.get("provider", "unknown"), "error": result["error"]})
+            else:
+                results.append(result)
         except Exception as exc:
             # Never return raw tracebacks or credential-bearing request data.
             failures.append({"provider": "unknown", "error": str(exc)[:400]})
