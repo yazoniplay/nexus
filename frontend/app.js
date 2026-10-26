@@ -86,7 +86,7 @@ function renderMessages(){
    if(m.role==="user")return '<article class="message user"><div class="message-content">'+escapeHTML(m.text)+'</div></article>';
    const p=PROVIDERS.find(x=>x.id===m.provider);
    const name=m.name||(p?p.name:(m.provider||"AI"));
-   return '<article class="message '+(m.error?"error":"")+'"><div class="message-avatar">'+escapeHTML(p?.letter||name.slice(0,1).toUpperCase())+'</div><div class="message-content"><div class="message-label">'+escapeHTML(name)+' <span class="message-model">'+escapeHTML(m.model||"")+'</span></div><div class="message-text">'+formatText(m.text||"No response returned.")+'</div>'+renderBuildArtifacts(m.files,m.id)+'</div></article>';
+   return '<article class="message '+(m.error?"error":"")+'"><div class="message-avatar">'+escapeHTML(p?.letter||name.slice(0,1).toUpperCase())+'</div><div class="message-content"><div class="message-label">'+escapeHTML(name)+' <span class="message-model">'+escapeHTML(m.model||"")+'</span></div><div class="message-text">'+formatText(m.text||"No response returned.")+'</div>'+renderBuildArtifacts(m.files,m.id,m.pr)+'</div></article>';
  }).join("");
 
  host.querySelectorAll("[data-build-action]").forEach(btn=>btn.addEventListener("click",()=>{
@@ -103,10 +103,12 @@ function renderMessages(){
  }));
  scrollBottom();
 }
-function renderBuildArtifacts(files,messageId){
+function renderBuildArtifacts(files,messageId,pr){
  if(!Array.isArray(files)||!files.length)return "";
- return '<div class="build-artifacts">'+files.map((file,i)=>'<section class="build-file"><div class="build-file-head"><div><strong>'+escapeHTML(file.path)+'</strong><small>'+escapeHTML(file.reason||"Generated file")+'</small></div><div class="build-file-actions"><button type="button" data-build-action="copy" data-build-message="'+escapeHTML(messageId)+'" data-build-index="'+i+'">Copy</button><button type="button" data-build-action="download" data-build-message="'+escapeHTML(messageId)+'" data-build-index="'+i+'">Download</button></div></div><pre><code>'+escapeHTML(file.content)+'</code></pre></section>').join("")+'</div>';
+ const prPanel=pr&&pr.url?'<div class="build-file-head"><strong>Pull request #'+escapeHTML(pr.number||"")+'</strong><a href="'+escapeHTML(pr.url)+'" target="_blank" rel="noopener noreferrer">Review changes on GitHub ↗</a></div>':"";
+ return '<div class="build-artifacts">'+prPanel+files.map((file,i)=>'<section class="build-file"><div class="build-file-head"><div><strong>'+escapeHTML(file.path)+'</strong><small>'+escapeHTML(file.reason||"Generated file")+'</small></div><div class="build-file-actions"><button type="button" data-build-action="copy" data-build-message="'+escapeHTML(messageId)+'" data-build-index="'+i+'">Copy</button><button type="button" data-build-action="download" data-build-message="'+escapeHTML(messageId)+'" data-build-index="'+i+'">Download</button></div></div><pre><code>'+escapeHTML(file.content)+'</code></pre></section>').join("")+'</div>';
 }
+
 function formatText(text){
  // Escape first; preserve code fences and simple paragraphs without interpreting model output as HTML.
  const safe=escapeHTML(text);
@@ -140,7 +142,7 @@ async function sendMessage(raw){
      const build=data.build;
      if(!build)throw new Error("The gateway returned no build result.");
      const files=Array.isArray(build.files)?build.files:[];
-     appendMessage({id:uid(),role:"assistant",provider:"nexus",name:"Nexus Build",text:String(build.summary||"Build generated.")+(files.length?"\n\nGenerated "+files.length+" file(s). Copy or download them below.":"\n\nNo files were generated.")+((build.notes||[]).length?"\n\nNotes: "+build.notes.join(" · "):""),files,at:Date.now()});
+     appendMessage({id:uid(),role:"assistant",provider:"nexus",name:"Nexus Build",text:String(build.summary||"Build generated.")+(files.length?"\\n\\nCommitted to branch "+(build.branch||"")+" and opened PR "+(build.pr?.number?"#"+build.pr.number:"")+".":"\\n\\nNo files were committed.")+((build.team?.engineers||[]).length?"\\n\\nTeam: "+build.team.engineers.join(" + ")+" · peer review: "+(build.team.reviews||[]).join(", ")+" · lead: "+(build.team.lead||"Nexus"):"")+((build.notes||[]).length?"\\n\\nNotes: "+build.notes.join(" · "):""),files,pr:build.pr||null,branch:build.branch||"",at:Date.now()});
      return;
    }
    const responses=Array.isArray(data.responses)?data.responses:[];
