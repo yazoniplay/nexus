@@ -34,7 +34,8 @@ def test_chat_requires_non_empty_message():
 def test_github_connection_is_not_authenticated_by_default():
     response = client.get("/api/github/connection")
     assert response.status_code == 200
-    assert response.json() == {"connected": False}
+    assert response.json()["connected"] is False
+    assert "configured" in response.json()
 
 
 def test_github_repository_list_requires_session():
