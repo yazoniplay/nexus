@@ -4,7 +4,10 @@ const PROVIDERS=[
  {id:"openai",name:"ChatGPT",letter:"O"},
  {id:"gemini",name:"Gemini",letter:"G"},
  {id:"ollama",name:"Ollama Cloud",letter:"◎"},
- {id:"anthropic",name:"Claude",letter:"C"}
+ {id:"anthropic",name:"Claude",letter:"C"},
+ {id:"deepseek",name:"DeepSeek",letter:"D"},
+ {id:"qwen",name:"Qwen",letter:"Q"},
+ {id:"grok",name:"Grok",letter:"X"}
 ];
 const STORAGE_KEY="nexus.chats.v2";
 let providerStatus={};
@@ -23,8 +26,9 @@ function loadChats(){try{const saved=JSON.parse(localStorage.getItem(STORAGE_KEY
 function renderHistory(){
  const host=$("chatHistory");
  if(!chats.length){host.innerHTML='<div class="history-empty">Your conversations will appear here.</div>';return;}
- host.innerHTML=chats.map(c=>'<button class="history-item '+(c.id===activeChatId?"active":"")+'" data-chat-id="'+escapeHTML(c.id)+'"><span class="history-icon">◷</span><span>'+escapeHTML(c.title||"New chat")+'</span></button>').join("");
+ host.innerHTML=chats.map(c=>'<div class="history-row"><button class="history-item '+(c.id===activeChatId?"active":"")+'" data-chat-id="'+escapeHTML(c.id)+'"><span class="history-icon">◷</span><span class="history-title">'+escapeHTML(c.title||"New chat")+'</span></button><button class="delete-chat" data-delete-chat="'+escapeHTML(c.id)+'" aria-label="Delete chat" title="Delete chat">×</button></div>').join("");
  host.querySelectorAll("[data-chat-id]").forEach(btn=>btn.addEventListener("click",()=>{activeChatId=btn.dataset.chatId;renderHistory();renderMessages();closeSidebar();}));
+ host.querySelectorAll("[data-delete-chat]").forEach(btn=>btn.addEventListener("click",e=>{e.stopPropagation();deleteChat(btn.dataset.deleteChat);}));
 }
 function renderProviders(){
  const list=PROVIDERS.map(p=>{
@@ -74,6 +78,7 @@ $("repoSelect").addEventListener("change",e=>{
  toast(selectedRepo?"Repository selected. Its source files will be sent as context with your next message.":"Repository context turned off.");
 });
 $("refreshRepos").addEventListener("click",refreshRepos);
+function deleteChat(id){const c=chats.find(x=>x.id===id);if(!c)return;if(!confirm('Delete "'+(c.title||"New chat")+'" and all messages?'))return;chats=chats.filter(x=>x.id!==id);if(activeChatId===id)activeChatId=chats[0]?.id||null;saveChats();renderHistory();renderMessages();toast("Chat deleted.");}
 function newChat(){
  const c={id:uid(),title:"New chat",createdAt:Date.now(),messages:[]};
  chats.unshift(c);activeChatId=c.id;saveChats();renderHistory();renderMessages();$("chatInput").focus();closeSidebar();
@@ -176,6 +181,14 @@ $("modeToggle").addEventListener("click",()=>{
  $("chatInput").placeholder=buildMode?"Describe what you want Nexus to implement in the selected repository…":"Message Nexus…";
  $("composerHint").textContent=buildMode?"Build mode coordinates the AI team, commits changes to a new GitHub branch, and opens a pull request. Select a repository first.":"Enter to send · Shift + Enter for a new line";
 });
+
+const SCHEDULE_KEY="nexus.schedules.v1",AUTOPILOT_KEY="nexus.autopilot.v1";let schedules=[],autopilotOn=false,lastAutopilotAt=0;
+function saveSchedules(){try{localStorage.setItem(SCHEDULE_KEY,JSON.stringify(schedules));}catch{}}
+function renderSchedules(){const host=$("scheduleList");if(!host)return;host.innerHTML=schedules.length?schedules.map(x=>'<div class="schedule-item"><strong>'+escapeHTML(x.prompt)+'</strong><small>'+escapeHTML(new Date(x.at).toLocaleString())+' · '+escapeHTML(x.status)+'</small><button type="button" data-remove-schedule="'+escapeHTML(x.id)+'">Remove</button></div>').join(""):'<small class="schedule-note">No scheduled tasks.</small>';host.querySelectorAll("[data-remove-schedule]").forEach(b=>b.addEventListener("click",()=>{schedules=schedules.filter(x=>x.id!==b.dataset.removeSchedule);saveSchedules();renderSchedules();}));}
+function updateAutopilotState(){const el=$("autopilotState");if(el)el.textContent=autopilotOn?"On · checking the selected repository every 30 minutes while this page stays open.":"Off · agents run only when asked.";}
+async function runScheduledBuild(prompt,label){if(sending){toast(label+" delayed: another run is active.",true);return false;}if(!selectedRepo){toast("Select a GitHub repository before running automation.",true);return false;}setSending(true);try{const r=await fetch(NEXUS_AI_URL,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({action:"build",message:prompt,repo:selectedRepo})});const d=await r.json().catch(()=>({}));if(!r.ok)throw new Error(d.error||"Build failed");const b=d.build;if(!b)throw new Error("No build result returned");const c={id:uid(),title:label,createdAt:Date.now(),messages:[]};c.messages.push({id:uid(),role:"assistant",provider:"nexus",name:label,text:String(b.summary||"Autonomous run finished.")+(b.pr?.url?"\n\nPull request: "+b.pr.url:""),files:b.files||[],pr:b.pr||null,branch:b.branch||"",team:b.team||null,at:Date.now()});chats.unshift(c);activeChatId=c.id;saveChats();renderHistory();renderMessages();toast(label+" finished.");return true;}catch(e){toast(label+" failed: "+(e.message||"unknown error"),true);return false;}finally{setSending(false);}}
+function tickAutomation(){const now=Date.now();for(const x of schedules.filter(s=>s.status==="Pending"&&s.at<=now)){x.status="Running";saveSchedules();renderSchedules();runScheduledBuild(x.prompt,"Scheduled task").then(ok=>{x.status=ok?"Completed":"Failed";saveSchedules();renderSchedules();});}if(autopilotOn&&now-lastAutopilotAt>=30*60*1000){lastAutopilotAt=now;runScheduledBuild("Autonomously inspect this repository, have every configured AI agent review and discuss possible improvements, then implement the single highest-value safe improvement as a pull request. Do not merge automatically. If nothing is justified, explain why.","Nexus Autopilot");}}
+function setupAutomation(){try{schedules=JSON.parse(localStorage.getItem(SCHEDULE_KEY)||"[]");if(!Array.isArray(schedules))schedules=[];}catch{schedules=[];}autopilotOn=localStorage.getItem(AUTOPILOT_KEY)==="true";$("autopilotToggle").checked=autopilotOn;updateAutopilotState();renderSchedules();$("autopilotToggle").addEventListener("change",e=>{autopilotOn=e.target.checked;localStorage.setItem(AUTOPILOT_KEY,String(autopilotOn));updateAutopilotState();toast(autopilotOn?"Autopilot enabled. Keep Nexus open.":"Autopilot paused.");});$("addSchedule").addEventListener("click",()=>{const prompt=$("schedulePrompt").value.trim(),at=new Date($("scheduleTime").value).getTime();if(!prompt){toast("Describe the task first.",true);return;}if(!Number.isFinite(at)||at<=Date.now()){toast("Choose a future date and time.",true);return;}schedules.push({id:uid(),prompt,at,status:"Pending"});schedules.sort((a,b)=>a.at-b.at);saveSchedules();renderSchedules();$("schedulePrompt").value="";toast("Task scheduled. Nexus must stay open.");});setInterval(tickAutomation,15000);}
 function resizeInput(){const el=$("chatInput");el.style.height="auto";el.style.height=Math.min(el.scrollHeight,220)+"px";}
 function openSidebar(){$("sidebar").classList.add("open");$("mobileScrim").classList.add("show");}
 function closeSidebar(){$("sidebar").classList.remove("open");$("mobileScrim").classList.remove("show");}
@@ -188,4 +201,4 @@ $("openSidebar").addEventListener("click",openSidebar);
 $("closeSidebar").addEventListener("click",closeSidebar);
 $("mobileScrim").addEventListener("click",closeSidebar);
 window.addEventListener("resize",()=>{if(window.innerWidth>700)closeSidebar();});
-loadChats();refreshStatus();refreshRepos();
+loadChats();refreshStatus();refreshRepos();setupAutomation();
