@@ -61,3 +61,42 @@ def test_chat_repository_context_requires_github_session():
         json={"message": "Review this repository", "repository": "someone/project"},
     )
     assert response.status_code == 401
+
+
+
+def test_github_actions_are_reported_separately_from_oauth():
+    response = client.get("/api/status")
+    assert response.status_code == 200
+    assert "github_actions" in response.json()["capabilities"]
+
+
+def test_github_actions_route_is_disabled_in_production(monkeypatch):
+    monkeypatch.setenv("APP_ENV", "production")
+    response = client.post(
+        "/api/github/actions",
+        json={"action": "list_repos", "payload": {}},
+    )
+    assert response.status_code == 503
+
+
+def test_github_actions_route_forwards_allowlisted_action(monkeypatch):
+    async def fake_invoke(action, **payload):
+        return {"repos": [{"full_name": "owner/repo"}], "received": {"action": action, **payload}}
+
+    monkeypatch.setenv("APP_ENV", "development")
+    monkeypatch.setattr("main.invoke_github", fake_invoke)
+    response = client.post(
+        "/api/github/actions",
+        json={"action": "list_repos", "payload": {"limit": 10}},
+    )
+    assert response.status_code == 200
+    assert response.json()["ok"] is True
+    assert response.json()["result"]["received"] == {"action": "list_repos", "limit": 10}
+
+
+def test_github_actions_route_rejects_unknown_action():
+    response = client.post(
+        "/api/github/actions",
+        json={"action": "delete_everything", "payload": {}},
+    )
+    assert response.status_code == 422
