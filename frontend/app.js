@@ -10,7 +10,9 @@ const STORAGE_KEY="nexus.chats.v2";
 let providerStatus={};
 let chats=[];
 let activeChatId=null;
-let sending=false;\nlet repositories=[];\nlet selectedRepo=localStorage.getItem("nexus.github.repo")||"";
+let sending=false;
+let repositories=[];
+let selectedRepo=localStorage.getItem("nexus.github.repo")||"";
 const uid=()=>Date.now().toString(36)+Math.random().toString(36).slice(2,8);
 const escapeHTML=s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 function toast(message,error=false){const el=document.createElement("div");el.className="toast"+(error?" error":"");el.textContent=message;$("toastRegion").appendChild(el);setTimeout(()=>el.remove(),4500);}
