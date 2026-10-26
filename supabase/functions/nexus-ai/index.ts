@@ -4,7 +4,7 @@ const cors = {"Access-Control-Allow-Origin":"*","Access-Control-Allow-Headers":"
 const json = (status:number, body:unknown) => new Response(JSON.stringify(body),{status,headers:cors});
 type P = "openai"|"gemini"|"ollama";
 const all:P[] = ["openai","gemini","ollama"];
-const defaults:Record<P,string> = {openai:"gpt-4.1-mini",gemini:"gemini-2.5-flash",ollama:"gemma4:31b"};
+const defaults:Record<P,string> = {openai:"gpt-4.1-mini",gemini:"gemini-3.5-flash-lite",ollama:"gemma4:31b"};
 const key = (p:P) => p==="openai" ? Deno.env.get("OPENAI_API_KEY")||Deno.env.get("CHATGPT_API_KEY")||"" : p==="gemini" ? Deno.env.get("GEMINI_API_KEY")||Deno.env.get("GOOGLE_API_KEY")||"" : Deno.env.get("OLLAMA_API_KEY")||"";
 const model = (p:P) => Deno.env.get(p.toUpperCase()+"_MODEL")||defaults[p];
 const recent = new Map<string,number[]>();
