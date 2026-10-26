@@ -38,7 +38,7 @@ Then open `http://127.0.0.1:5500`. The frontend calls `http://127.0.0.1:8000` by
 
 ## Provider configuration
 
-Copy `backend/.env.example` to `backend/.env`, fill in the API keys you actually have, and export/load those variables before starting Uvicorn. The application reads environment variables; it does **not** automatically load a `.env` file yet. For local development, install `python-dotenv` and run Uvicorn with an environment loader, or set variables in your shell. Never commit real API keys or place them in frontend JavaScript.
+Copy `backend/.env.example` to `backend/.env`, fill in the API keys you actually have, and export/load those variables before starting Uvicorn. The backend automatically loads `backend/.env` through `python-dotenv` when started from the backend directory. Never commit real API keys or place them in frontend JavaScript.
 
 Model IDs can be changed through `ANTHROPIC_MODEL`, `OPENAI_MODEL`, `GEMINI_MODEL`, and `OLLAMA_MODEL`. Defaults are examples and may need to be adjusted for model access on each account. Ollama Cloud uses `https://ollama.com/api` with a bearer API key; it does not require a local Ollama install.
 
