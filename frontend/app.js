@@ -3,7 +3,6 @@ const $=id=>document.getElementById(id);
 const PROVIDERS=[
  {id:"gemini",name:"Gemini",letter:"G"},
  {id:"gemma4",name:"Gemma 4",letter:"G"},
- {id:"qwen_ollama",name:"Gemma 4 Free Cloud",letter:"G"},
  {id:"groq",name:"Groq",letter:"G"},
  {id:"openrouter",name:"OpenRouter",letter:"O"},
  {id:"deepseek",name:"DeepSeek",letter:"D"}
