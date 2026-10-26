@@ -70,6 +70,13 @@ def _verify_payload(value: str) -> dict[str, Any] | None:
         return None
 
 
+def github_is_configured() -> bool:
+    names = ("GITHUB_APP_CLIENT_ID", "GITHUB_APP_CLIENT_SECRET", "GITHUB_CALLBACK_URL",
+             "NEXUS_SESSION_SECRET", "NEXUS_ENCRYPTION_KEY", "SUPABASE_URL",
+             "SUPABASE_SERVICE_ROLE_KEY")
+    return all(os.getenv(name, "").strip() for name in names)
+
+
 def _supabase_config() -> tuple[str, str]:
     return _required("SUPABASE_URL").rstrip("/"), _required("SUPABASE_SERVICE_ROLE_KEY")
 
@@ -218,8 +225,8 @@ def configure_github_routes(app) -> None:
     async def github_connection(request: Request):
         payload = _verify_payload(request.cookies.get(SESSION_COOKIE, ""))
         if not payload or not isinstance(payload.get("github_id"), int):
-            return {"connected": False}
-        return {"connected": True, "login": payload.get("login", "")}
+            return {"connected": False, "configured": github_is_configured()}
+        return {"connected": True, "configured": github_is_configured(), "login": payload.get("login", "")}
 
     @app.get("/api/github/repositories")
     async def github_repositories(request: Request):
