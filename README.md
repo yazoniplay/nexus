@@ -45,7 +45,7 @@ Model IDs can be changed through `ANTHROPIC_MODEL`, `OPENAI_MODEL`, `GEMINI_MODE
 
 ## GitHub connection setup
 
-1. Create a GitHub App in GitHub Developer Settings, enable user authorization, and configure the callback URL as `http://127.0.0.1:8000/api/github/callback` for local testing. Use the app's client ID and client secret in the backend environment. Request only the repository permissions this workspace needs; this first endpoint only lists repositories and does not write to them.
+1. Create a GitHub App in GitHub Developer Settings, enable user authorization, and configure the callback URL as `http://127.0.0.1:8000/api/github/callback` for local testing. Use the app's client ID and client secret in the backend environment. Start with read-only repository permissions (Metadata: read-only, Contents: read-only, Pull requests: read-only). This first integration only lists repositories and does not write to them; increase permissions only when a reviewed write workflow is added.
 2. In your Supabase project's SQL Editor, run the SQL in `supabase/migrations/202610260001_github_connections.sql`. It creates a private table with RLS enabled and no public access policies.
 3. Configure `GITHUB_APP_CLIENT_ID`, `GITHUB_APP_CLIENT_SECRET`, `GITHUB_CALLBACK_URL`, `FRONTEND_URL`, `NEXUS_SESSION_SECRET`, `NEXUS_ENCRYPTION_KEY`, `SUPABASE_URL`, and `SUPABASE_SERVICE_ROLE_KEY` in `backend/.env`. Generate the encryption key using the command in the example file and generate a separate long random session secret.
 4. Restart the backend and click **Connect GitHub** in Nexus. The callback validates OAuth state, encrypts the token before storing it in Supabase, and sets a signed HttpOnly session cookie. Repository listing uses the connected account only.
