@@ -102,8 +102,9 @@ async def test_provider(provider: str):
         )
     except asyncio.TimeoutError:
         raise HTTPException(status_code=504, detail="Provider timed out during the connection test.")
-    except (RuntimeError, ValueError) as exc:
-        raise HTTPException(status_code=502, detail=str(exc)[:600])
+    except Exception as exc:
+        # Convert network/provider failures into a controlled API response.
+        raise HTTPException(status_code=502, detail=str(exc)[:600] or "Provider request failed.")
     return {
         "ok": True,
         "message": f"{provider.title()} API responded successfully ({result['model']}).",
