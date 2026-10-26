@@ -85,9 +85,9 @@ async def generate(provider: str, prompt: str, *, system: str = "You are an agen
             data = _text_or_error(response)
             output = (data.get("choices") or [{}])[0].get("message", {}).get("content", "")
         elif provider == "gemini":
+            headers["x-goog-api-key"] = key
             response = await client.post(
                 f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent",
-                params={"key": key},
                 headers=headers,
                 json={"systemInstruction": {"parts": [{"text": system}]},
                       "contents": [{"role": "user", "parts": [{"text": prompt}]}],
