@@ -3,7 +3,7 @@ const $=id=>document.getElementById(id);
 const PROVIDERS=[
  {id:"gemini",name:"Gemini",letter:"G"},
  {id:"gemma4",name:"Gemma 4",letter:"G"},
- {id:"qwen_ollama",name:"Kimi K2.7 Code (Ollama Cloud)",letter:"K"},
+ {id:"qwen_ollama",name:"Gemma 4 Free Cloud",letter:"G"},
  {id:"deepseek",name:"DeepSeek",letter:"D"}
 ];
 const STORAGE_KEY="nexus.chats.v2";
