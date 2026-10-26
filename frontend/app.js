@@ -1,4 +1,12 @@
 const NEXUS_API_BASE = window.NEXUS_API_BASE || "http://127.0.0.1:8000";
+const NEXUS_AI_URL = "https://kuvyaytptnghopqbykab.supabase.co/functions/v1/nexus-ai";
+let aiHealthy = false;
+async function nexusAI(payload) {
+  const response = await fetch(NEXUS_AI_URL, {method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(payload)});
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(data.error || data.message || "Nexus AI request failed (" + response.status + ")");
+  return data;
+}
 const providers = [
   {id:"anthropic",name:"Claude",modelLabel:"Anthropic API",letter:"C",className:"claude",description:"Engineering, implementation, and code review."},
   {id:"openai",name:"ChatGPT",modelLabel:"OpenAI API",letter:"O",className:"openai",description:"Planning, orchestration, and reasoning."},
@@ -64,9 +72,7 @@ function renderProviderSettings() {
   }).join("");
   document.querySelectorAll(".test-provider").forEach(btn => btn.addEventListener("click", async () => {
     try {
-      const response = await fetch(NEXUS_API_BASE + "/api/providers/" + btn.dataset.provider + "/test", {method:"POST"});
-      const data = await response.json();
-      if (!response.ok) throw new Error(data.detail || "Connection test failed");
+      const data = await nexusAI({action:"test",provider:btn.dataset.provider});
       toast(data.message || "Provider connection verified.");
     } catch (err) { toast(err.message || "Provider test failed.", "error"); }
   }));
@@ -76,35 +82,43 @@ function renderParticipants() {
   $("chatParticipants").innerHTML = providers.map(p => providerRow(p, true)).join("");
 }
 async function refreshStatus() {
-  $("connectionText").textContent = "Checking backend…";
+  $("connectionText").textContent = "Checking AI gateway…";
   try {
-    const response = await fetch(NEXUS_API_BASE + "/api/status", {signal:AbortSignal.timeout(3500)});
-    if (!response.ok) throw new Error("Backend unavailable");
+    const data = await nexusAI({action:"status"});
+    aiHealthy = true;
+    providerStatus = data.providers || {};
+    $("connectionText").textContent = "AI gateway connected";
+    $("connectionText").previousElementSibling.classList.add("good");
+    $("systemStatus").textContent = "AI gateway connected";
+    $("systemStatus").previousElementSibling.classList.add("good");
+  } catch (err) {
+    aiHealthy = false;
+    providerStatus = {};
+    $("connectionText").textContent = "AI gateway offline";
+    $("connectionText").previousElementSibling.classList.remove("good");
+    $("systemStatus").textContent = "AI gateway offline";
+    $("systemStatus").previousElementSibling.classList.remove("good");
+    toast(err.message || "Could not connect to the Nexus AI gateway.", "error");
+  }
+  try {
+    const response = await fetch(NEXUS_API_BASE + "/api/status", {signal:AbortSignal.timeout(1800)});
+    if (!response.ok) throw new Error("Local backend unavailable");
     const data = await response.json();
     backendHealthy = true;
-    providerStatus = data.providers || {};
-    $("connectionText").textContent = "Backend connected";
-    $("connectionText").previousElementSibling.classList.add("good");
-    $("systemStatus").textContent = "Backend connected";
-    $("systemStatus").previousElementSibling.classList.add("good");
     $("repoCount").textContent = String(data.repository_count ?? 0);
     $("runCount").textContent = String(data.active_runs ?? 0);
     $("attentionCount").textContent = String(data.attention_count ?? 0);
     $("repoSubtext").textContent = (data.repository_count ?? 0) + " connected repository connections.";
   } catch {
     backendHealthy = false;
-    providerStatus = {};
-    $("connectionText").textContent = "Backend offline";
-    $("connectionText").previousElementSibling.classList.remove("good");
-    $("systemStatus").textContent = "Backend offline";
-    $("systemStatus").previousElementSibling.classList.remove("good");
+    $("repoSubtext").textContent = "AI chat works through Supabase; local GitHub/workflow backend is offline.";
   }
   renderProviders();
   await refreshGithubConnection();
 }
 async function submitChat(message) {
   if (!message.trim()) return;
-  if (!backendHealthy) { toast("Start the Nexus backend first. No message was sent.", "error"); return; }
+  if (!aiHealthy) { toast("Nexus AI gateway is offline. Refresh and try again.", "error"); return; }
   const box = $("chatMessages");
   const empty = box.querySelector(".empty-chat");
   if (empty) empty.remove();
@@ -120,9 +134,7 @@ async function submitChat(message) {
   box.appendChild(status);
   box.scrollTop = box.scrollHeight;
   try {
-    const response = await fetch(NEXUS_API_BASE + "/api/chat", {method:"POST",headers:{"Content-Type":"application/json"},credentials:"include",body:JSON.stringify({message,mode:"discuss",repository:$("chatRepository")?.value || null})});
-    const data = await response.json();
-    if (!response.ok) throw new Error(data.detail || "Chat request failed");
+    const data = await nexusAI({action:"chat",message,repository:$("chatRepository")?.value || null,mode:"discuss"});
     status.textContent = data.message || "No final response returned.";
     status.style.whiteSpace = "pre-wrap";
     status.style.lineHeight = "1.6";
