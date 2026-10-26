@@ -140,8 +140,7 @@ async function sendMessage(raw){
      const build=data.build;
      if(!build)throw new Error("The gateway returned no build result.");
      const files=Array.isArray(build.files)?build.files:[];
-     const artifactText=files.map(file=>"FILE: "+file.path+"\n"+(file.reason||"Generated file")+"\n\n\`\`\`\n"+file.content+"\n\`\`\`").join("\n\n");
-     appendMessage({id:uid(),role:"assistant",provider:"nexus",name:"Nexus Build",text:String(build.summary||"Build generated.")+(artifactText?"\n\n"+artifactText:"\n\nNo files were generated.")+((build.notes||[]).length?"\n\nNotes: "+build.notes.join(" · "):""),files,at:Date.now()});
+     appendMessage({id:uid(),role:"assistant",provider:"nexus",name:"Nexus Build",text:String(build.summary||"Build generated.")+(files.length?"\n\nGenerated "+files.length+" file(s). Copy or download them below.":"\n\nNo files were generated.")+((build.notes||[]).length?"\n\nNotes: "+build.notes.join(" · "):""),files,at:Date.now()});
      return;
    }
    const responses=Array.isArray(data.responses)?data.responses:[];
