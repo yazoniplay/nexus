@@ -9,3 +9,27 @@
 .repo-hint{font-size:10px;line-height:1.5;color:#777;margin-top:7px}
 .repo-hint.error{color:#e6a29a}
 .repo-hint.selected{color:#b9e6a1}
+
+/* Repository build mode */
+.composer-actions{display:flex;align-items:center;gap:10px;min-width:0}
+.mode-toggle{flex:0 0 auto;border:1px solid #484848;border-radius:8px;background:#242424;color:#aaa;padding:6px 9px;font-size:10px;transition:background .16s,border-color .16s,color .16s}
+.mode-toggle:hover{color:#fff;border-color:#666}
+.mode-toggle.active{background:#d7e7ce;color:#1d2819;border-color:#d7e7ce}
+@media(max-width:700px){.composer-actions{gap:7px}.mode-toggle{padding:7px 8px;font-size:10px}.composer-bottom>span{line-height:1.4}}
+
+/* Nexus Build mode and generated file artifacts */
+.composer-actions{display:flex;align-items:center;gap:10px;min-width:0}
+.mode-toggle{flex:0 0 auto;border:1px solid #484848;border-radius:8px;background:#242424;color:#aaa;padding:6px 9px;font-size:10px;transition:background .16s,border-color .16s,color .16s}
+.mode-toggle:hover{color:#fff;border-color:#666}
+.mode-toggle.active{background:#d7e7ce;color:#1d2819;border-color:#d7e7ce}
+.build-artifacts{display:grid;gap:12px;margin-top:14px}
+.build-file{border:1px solid #3b3b3b;border-radius:10px;overflow:hidden;background:#1d1d1d}
+.build-file-head{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 12px;background:#262626;border-bottom:1px solid #383838}
+.build-file-head strong{display:block;overflow-wrap:anywhere;font:600 11px ui-monospace,monospace;color:#eee}
+.build-file-head small{display:block;margin-top:4px;color:#888;font-size:10px}
+.build-file-actions{display:flex;gap:6px;flex:0 0 auto}
+.build-file-actions button{border:1px solid #494949;border-radius:6px;background:#303030;color:#ddd;padding:6px 8px;font-size:10px}
+.build-file-actions button:hover{background:#414141;color:white}
+.build-file pre{max-height:340px;overflow:auto;margin:0;padding:12px;background:#181818;color:#d8d8d8;font:11px/1.65 ui-monospace,SFMono-Regular,Consolas,monospace;white-space:pre}
+.build-file code{font:inherit}
+@media(max-width:700px){.composer-actions{gap:7px}.mode-toggle{padding:7px 8px;font-size:10px}.composer-bottom>span{line-height:1.4}.build-file-head{align-items:flex-start;flex-direction:column}.build-file-actions{width:100%}.build-file-actions button{flex:1}}
