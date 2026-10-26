@@ -16,20 +16,11 @@
         <button class="icon-btn mobile-close" id="closeSidebar" aria-label="Close sidebar">×</button>
       </div>
       <button class="new-chat" id="newChat"><span>＋</span> New chat</button>
+      <a class="settings-link" href="./settings.html">⚙ Settings <span>Autopilot &amp; schedules</span></a>
       <section class="repo-picker">
         <div class="repo-picker-heading"><span>GITHUB REPOSITORY</span><button class="repo-refresh" id="refreshRepos" type="button" title="Refresh repositories" aria-label="Refresh repositories">↻</button></div>
         <select id="repoSelect" aria-label="Choose a GitHub repository"><option value="">No repository selected</option></select>
         <div id="repoHint" class="repo-hint">Choose a repo to let AIs inspect its code.</div>
-      </section>
-      <section class="autopilot-panel" aria-label="Autopilot and scheduler">
-        <div class="autopilot-heading"><span>AI AUTOPILOT</span><label class="switch"><input id="autopilotToggle" type="checkbox"><span></span></label></div>
-        <p id="autopilotState">Off · agents run only when asked.</p>
-        <label class="schedule-label" for="schedulePrompt">Scheduled task</label>
-        <textarea id="schedulePrompt" rows="2" maxlength="1200" placeholder="Review the repo and propose useful improvements"></textarea>
-        <label class="schedule-label" for="scheduleTime">Run at</label>
-        <div class="schedule-controls"><input id="scheduleTime" type="datetime-local"><button id="addSchedule" type="button">Schedule</button></div>
-        <div id="scheduleList" class="schedule-list"></div>
-        <small class="schedule-note">Tasks run while Nexus is open. Reliable always-on autopilot needs a background worker.</small>
       </section>
       <div class="side-section-title">YOUR CHATS</div>
       <div class="chat-history" id="chatHistory"></div>
@@ -43,7 +34,7 @@
       <header class="topbar">
         <button class="icon-btn menu-btn" id="openSidebar" aria-label="Open chat history">☰</button>
         <div class="topbar-title"><span class="brand-icon mini">N</span><span>Nexus</span><span class="topbar-subtitle">/ Chat</span></div>
-        <div class="topbar-right"><span class="connection-label"><i id="connectionDot"></i><span id="connectionText">Checking AIs…</span></span></div>
+        <div class="topbar-right"><a class="topbar-settings" href="./settings.html" aria-label="Settings">⚙ Settings</a><span class="connection-label"><i id="connectionDot"></i><span id="connectionText">Checking AIs…</span></span></div>
       </header>
       <div class="chat-scroll" id="chatScroll">
         <section class="welcome" id="welcome">
