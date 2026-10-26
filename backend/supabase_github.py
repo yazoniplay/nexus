@@ -50,7 +50,7 @@ async def invoke_github(action: str, **payload: Any) -> dict[str, Any]:
                     "Authorization": f"Bearer {key}",
                     "Content-Type": "application/json",
                 },
-                json={"action": action, **payload},
+                json={"action": action, **{key: value for key, value in payload.items() if key != "action"}},
             )
     except httpx.HTTPError as exc:
         raise GitHubFunctionError(502, "Could not reach the Nexus GitHub service.") from exc
