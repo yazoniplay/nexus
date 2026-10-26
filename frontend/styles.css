@@ -33,3 +33,14 @@
 .build-file pre{max-height:340px;overflow:auto;margin:0;padding:12px;background:#181818;color:#d8d8d8;font:11px/1.65 ui-monospace,SFMono-Regular,Consolas,monospace;white-space:pre}
 .build-file code{font:inherit}
 @media(max-width:700px){.composer-actions{gap:7px}.mode-toggle{padding:7px 8px;font-size:10px}.composer-bottom>span{line-height:1.4}.build-file-head{align-items:flex-start;flex-direction:column}.build-file-actions{width:100%}.build-file-actions button{flex:1}}
+
+.team-discussion{margin-top:12px;border:1px solid var(--border,#343434);border-radius:10px;overflow:hidden;background:rgba(128,128,128,.045)}
+.team-discussion summary{cursor:pointer;padding:11px 13px;font-size:12px;font-weight:600;color:var(--text,#ddd);user-select:none}
+.team-discussion summary:hover{background:rgba(128,128,128,.08)}
+.team-discussion-body{padding:0 10px 10px;display:grid;gap:8px}
+.team-message{padding:10px 11px;border:1px solid var(--border,#343434);border-radius:8px;background:rgba(128,128,128,.04);overflow-wrap:anywhere}
+.team-message-head{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:7px}
+.team-message-head strong{font-size:11px;color:var(--accent,#a7c7ff);text-transform:uppercase;letter-spacing:.06em}
+.team-message-head span{font-size:10px;color:var(--muted,#888)}
+.team-message .message-text p,.team-message p{font-size:12px;line-height:1.6;margin:0 0 8px}
+.team-message pre{max-width:100%;overflow:auto}

@@ -86,7 +86,7 @@ function renderMessages(){
    if(m.role==="user")return '<article class="message user"><div class="message-content">'+escapeHTML(m.text)+'</div></article>';
    const p=PROVIDERS.find(x=>x.id===m.provider);
    const name=m.name||(p?p.name:(m.provider||"AI"));
-   return '<article class="message '+(m.error?"error":"")+'"><div class="message-avatar">'+escapeHTML(p?.letter||name.slice(0,1).toUpperCase())+'</div><div class="message-content"><div class="message-label">'+escapeHTML(name)+' <span class="message-model">'+escapeHTML(m.model||"")+'</span></div><div class="message-text">'+formatText(m.text||"No response returned.")+'</div>'+renderBuildArtifacts(m.files,m.id)+'</div></article>';
+   return '<article class="message '+(m.error?"error":"")+'"><div class="message-avatar">'+escapeHTML(p?.letter||name.slice(0,1).toUpperCase())+'</div><div class="message-content"><div class="message-label">'+escapeHTML(name)+' <span class="message-model">'+escapeHTML(m.model||"")+'</span></div><div class="message-text">'+formatText(m.text||"No response returned.")+'</div>'+renderBuildArtifacts(m.files,m.id,m.pr)+renderTeamDiscussion(m.team)+'</div></article>';
  }).join("");
 
  host.querySelectorAll("[data-build-action]").forEach(btn=>btn.addEventListener("click",()=>{
@@ -103,10 +103,18 @@ function renderMessages(){
  }));
  scrollBottom();
 }
-function renderBuildArtifacts(files,messageId){
+function renderBuildArtifacts(files,messageId,pr){
  if(!Array.isArray(files)||!files.length)return "";
- return '<div class="build-artifacts">'+files.map((file,i)=>'<section class="build-file"><div class="build-file-head"><div><strong>'+escapeHTML(file.path)+'</strong><small>'+escapeHTML(file.reason||"Generated file")+'</small></div><div class="build-file-actions"><button type="button" data-build-action="copy" data-build-message="'+escapeHTML(messageId)+'" data-build-index="'+i+'">Copy</button><button type="button" data-build-action="download" data-build-message="'+escapeHTML(messageId)+'" data-build-index="'+i+'">Download</button></div></div><pre><code>'+escapeHTML(file.content)+'</code></pre></section>').join("")+'</div>';
+ const prPanel=pr&&pr.url?'<div class="build-file-head"><strong>Pull request #'+escapeHTML(pr.number||"")+'</strong><a href="'+escapeHTML(pr.url)+'" target="_blank" rel="noopener noreferrer">Review changes on GitHub ↗</a></div>':"";
+ return '<div class="build-artifacts">'+prPanel+files.map((file,i)=>'<section class="build-file"><div class="build-file-head"><div><strong>'+escapeHTML(file.path)+'</strong><small>'+escapeHTML(file.reason||"Generated file")+'</small></div><div class="build-file-actions"><button type="button" data-build-action="copy" data-build-message="'+escapeHTML(messageId)+'" data-build-index="'+i+'">Copy</button><button type="button" data-build-action="download" data-build-message="'+escapeHTML(messageId)+'" data-build-index="'+i+'">Download</button></div></div><pre><code>'+escapeHTML(file.content)+'</code></pre></section>').join("")+'</div>';
 }
+
+function renderTeamDiscussion(team){
+ if(!team||!Array.isArray(team.messages)||!team.messages.length)return "";
+ const messages=team.messages.map(m=>'<article class="team-message"><div class="team-message-head"><strong>'+escapeHTML(m.provider||"AI")+'</strong><span>Round '+escapeHTML(m.round||"")+'</span></div><div>'+formatText(m.text||"")+'</div></article>').join("");
+ return '<details class="team-discussion"><summary>Autonomous team discussion · '+team.messages.length+' messages across '+escapeHTML(team.rounds||0)+' rounds</summary><div class="team-discussion-body">'+messages+'</div></details>';
+}
+
 function formatText(text){
  // Escape first; preserve code fences and simple paragraphs without interpreting model output as HTML.
  const safe=escapeHTML(text);
@@ -140,7 +148,7 @@ async function sendMessage(raw){
      const build=data.build;
      if(!build)throw new Error("The gateway returned no build result.");
      const files=Array.isArray(build.files)?build.files:[];
-     appendMessage({id:uid(),role:"assistant",provider:"nexus",name:"Nexus Build",text:String(build.summary||"Build generated.")+(files.length?"\n\nGenerated "+files.length+" file(s). Copy or download them below.":"\n\nNo files were generated.")+((build.notes||[]).length?"\n\nNotes: "+build.notes.join(" · "):""),files,at:Date.now()});
+     appendMessage({id:uid(),role:"assistant",provider:"nexus",name:"Nexus Build",text:String(build.summary||"Build generated.")+(files.length?"\n\nCommitted to branch "+(build.branch||"")+" and opened PR "+(build.pr?.number?"#"+build.pr.number:"")+".":"\n\nNo files were committed.")+((build.team?.engineers||[]).length?"\n\nTeam: "+build.team.engineers.join(" + ")+" · peer review: "+(build.team.reviews||[]).join(", ")+" · lead: "+(build.team.lead||"Nexus"):"")+((build.notes||[]).length?"\n\nNotes: "+build.notes.join(" · "):""),files,pr:build.pr||null,branch:build.branch||"",team:build.team||null,at:Date.now()});
      return;
    }
    const responses=Array.isArray(data.responses)?data.responses:[];
@@ -166,7 +174,7 @@ $("modeToggle").addEventListener("click",()=>{
  button.setAttribute("aria-pressed",String(buildMode));
  button.textContent=buildMode?"🛠 Build mode":"💬 Chat mode";
  $("chatInput").placeholder=buildMode?"Describe what you want Nexus to implement in the selected repository…":"Message Nexus…";
- $("composerHint").textContent=buildMode?"Build mode generates complete file contents; select a repository first.":"Enter to send · Shift + Enter for a new line";
+ $("composerHint").textContent=buildMode?"Build mode coordinates the AI team, commits changes to a new GitHub branch, and opens a pull request. Select a repository first.":"Enter to send · Shift + Enter for a new line";
 });
 function resizeInput(){const el=$("chatInput");el.style.height="auto";el.style.height=Math.min(el.scrollHeight,220)+"px";}
 function openSidebar(){$("sidebar").classList.add("open");$("mobileScrim").classList.add("show");}

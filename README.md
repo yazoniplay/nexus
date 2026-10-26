@@ -9,11 +9,11 @@ Nexus is a responsive web workspace for coordinating Claude, OpenAI, Gemini, and
 - Provider connection tests that make a real, small model request.
 - Bounded multi-model discussion: configured providers answer independently in parallel, then one configured model synthesizes the responses. No endless debate loop.
 - Provider failures and timeouts are surfaced rather than represented as successful answers.
-- Build mode is explicitly planning-only until GitHub access and isolated execution are implemented.
+- Build mode runs a collaborative multi-agent loop: configured AIs propose changes, review one another's proposals, and a lead model integrates the patch. It commits files to a new branch and opens a pull request; it never writes directly to the default branch or merges/deploys automatically.
 - A PAT-backed Supabase Edge Function supports repository/file reads, branches, file writes, draft pull requests, issues, pull-request actions, releases, and workflow controls. The GitHub PAT stays in Supabase secrets.
 - A backend-only action client and local-development API route are wired to the Edge Function. Production action routes remain disabled until user authentication and audit logging are implemented.
 - The legacy GitHub OAuth connection flow remains in the codebase but is not required for the PAT-backed Edge Function path.
-- Durable job queue/workers, isolated code execution, and deployment are **not implemented yet**.
+- Durable background jobs and isolated code execution are **not implemented yet**. Build changes rely on repository-configured pull-request checks for CI.
 
 ## Development
 
