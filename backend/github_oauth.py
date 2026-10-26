@@ -163,7 +163,6 @@ def configure_github_routes(app) -> None:
             "Location": "https://github.com/login/oauth/authorize?" + urlencode({
                 "client_id": client_id,
                 "redirect_uri": _required("GITHUB_CALLBACK_URL"),
-                "scope": "read:user repo",
                 "state": state,
                 "allow_signup": "false",
             })
