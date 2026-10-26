@@ -110,7 +110,7 @@ async function submitChat(message) {
   box.appendChild(status);
   box.scrollTop = box.scrollHeight;
   try {
-    const response = await fetch(NEXUS_API_BASE + "/api/chat", {method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({message,mode:"discuss"})});
+    const response = await fetch(NEXUS_API_BASE + "/api/chat", {method:"POST",headers:{"Content-Type":"application/json"},credentials:"include",body:JSON.stringify({message,mode:"discuss",repository:$("chatRepository")?.value || null})});
     const data = await response.json();
     if (!response.ok) throw new Error(data.detail || "Chat request failed");
     status.textContent = data.message || "No final response returned.";
@@ -196,6 +196,7 @@ async function loadRepositories() {
     const repos = data.repositories || [];
     $("repoCount").textContent = String(repos.length);
     $("repoSubtext").textContent = repos.length + " repositories accessible to " + githubLogin + ".";
+    $("chatRepository").innerHTML = '<option value="">No repository selected</option>' + repos.map(repo => '<option value="' + escapeHTML(repo.full_name) + '">' + escapeHTML(repo.full_name) + '</option>').join("");
     $("repoEmpty").style.display = repos.length ? "none" : "block";
     $("repoGrid").innerHTML = repos.map(repo => '<article class="repo-card"><h3>'+escapeHTML(repo.full_name || repo.name)+'</h3><p>'+escapeHTML(repo.description || "No description")+'</p><span class="setting-value">'+escapeHTML(repo.private?"PRIVATE":"PUBLIC")+'</span><a href="'+escapeHTML(repo.html_url || "#")+'" target="_blank" rel="noopener noreferrer">Open repository ↗</a></article>').join("");
   } catch (err) { toast(err.message || "Could not load repositories.", "error"); }
