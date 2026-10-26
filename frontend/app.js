@@ -1,13 +1,9 @@
 const NEXUS_AI_URL="https://kuvyaytptnghopqbykab.supabase.co/functions/v1/nexus-ai";
 const $=id=>document.getElementById(id);
 const PROVIDERS=[
- {id:"openai",name:"ChatGPT",letter:"O"},
  {id:"gemini",name:"Gemini",letter:"G"},
  {id:"ollama",name:"Ollama Cloud",letter:"◎"},
- {id:"anthropic",name:"Claude",letter:"C"},
- {id:"deepseek",name:"DeepSeek",letter:"D"},
- {id:"qwen",name:"Qwen",letter:"Q"},
- {id:"grok",name:"Grok",letter:"X"}
+ {id:"deepseek",name:"DeepSeek",letter:"D"}
 ];
 const STORAGE_KEY="nexus.chats.v2";
 let providerStatus={};
