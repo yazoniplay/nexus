@@ -9,6 +9,7 @@ let backendHealthy = false;
 let providerStatus = {};
 let currentView = "overview";
 let githubConnected = false;
+let githubConfigured = false;
 let githubLogin = "";
 
 const $ = (id) => document.getElementById(id);
@@ -175,6 +176,7 @@ async function refreshGithubConnection() {
     const response = await fetch(NEXUS_API_BASE + "/api/github/connection", {credentials:"include", signal:AbortSignal.timeout(4000)});
     const data = await response.json();
     githubConnected = Boolean(response.ok && data.connected);
+    githubConfigured = Boolean(data.configured);
     githubLogin = data.login || "";
     $("connectGithubTop").textContent = githubConnected ? "Connected · " + githubLogin : "Connect GitHub ↗";
     $("connectGithubMain").textContent = githubConnected ? "GitHub connected: " + githubLogin : "Connect GitHub";
@@ -200,6 +202,7 @@ async function loadRepositories() {
 }
 function connectGithub() {
   if (!backendHealthy) return toast("Start the Nexus backend first.", "error");
+  if (!githubConfigured) return toast("GitHub OAuth is not configured on the backend yet. Follow the GitHub setup section in the repository README.", "error");
   window.location.href = NEXUS_API_BASE + "/api/github/connect";
 }
 $("connectGithubTop").addEventListener("click", connectGithub);
