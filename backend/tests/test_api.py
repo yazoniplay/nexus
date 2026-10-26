@@ -53,3 +53,11 @@ def test_github_connection_reports_unconfigured_when_credentials_are_missing(mon
     response = client.get("/api/github/connection")
     assert response.status_code == 200
     assert response.json()["configured"] is False
+
+
+def test_chat_repository_context_requires_github_session():
+    response = client.post(
+        "/api/chat",
+        json={"message": "Review this repository", "repository": "someone/project"},
+    )
+    assert response.status_code == 401
