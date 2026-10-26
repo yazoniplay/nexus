@@ -33,6 +33,9 @@ async def invoke_github(action: str, **payload: Any) -> dict[str, Any]:
         "delete_file", "create_pull_request", "create_issue", "comment_issue",
         "close_issue", "close_pull_request", "merge_pull_request",
         "dispatch_workflow", "rerun_workflow", "cancel_workflow_run",
+        "delete_branch", "list_releases", "create_release", "update_issue",
+        "add_issue_labels", "list_pr_reviews", "comment_pull_request",
+        "submit_pull_request_review",
     }
     if action not in allowed:
         raise ValueError("Unsupported GitHub action.")
