@@ -14,7 +14,7 @@ let providerStatus={};
 let chats=[];
 let activeChatId=null;
 let sending=false;
-let buildMode=false;
+let buildMode=false;\nlet executionMode=localStorage.getItem("nexus.build.mode")||"pull_request";\nlet effortLevel=localStorage.getItem("nexus.build.effort")||"medium";
 let repositories=[];
 let selectedRepo=localStorage.getItem("nexus.github.repo")||"";
 const uid=()=>Date.now().toString(36)+Math.random().toString(36).slice(2,8);
@@ -146,7 +146,7 @@ async function sendMessage(raw){
  pending.innerHTML='<div class="message-avatar">N</div><div class="message-content"><div class="message-label">Nexus <span class="message-model">Waiting for responses</span></div><div class="loading-dots" aria-label="AI models are responding"><i></i><i></i><i></i></div></div>';
  $("messages").appendChild(pending);$("welcome").hidden=true;scrollBottom();
  try{
-   const r=await fetch(NEXUS_AI_URL,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({action:buildMode?"build":"chat",message:text,repo:selectedRepo})});
+   const r=await fetch(NEXUS_AI_URL,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({action:buildMode?"build":"chat",message:text,repo:selectedRepo,mode:executionMode,effort:effortLevel})});
    const data=await r.json().catch(()=>({}));
    if(!r.ok)throw new Error(data.error||data.message||"AI request failed ("+r.status+")");
    if(buildMode){
@@ -177,9 +177,9 @@ $("modeToggle").addEventListener("click",()=>{
  const button=$("modeToggle");
  button.classList.toggle("active",buildMode);
  button.setAttribute("aria-pressed",String(buildMode));
- button.textContent=buildMode?"🛠 Build mode":"💬 Chat mode";
+ button.textContent=buildMode?"🛠 Build mode":"💬 Chat mode";\n  $("buildControls").hidden=!buildMode;
  $("chatInput").placeholder=buildMode?"Describe what you want Nexus to implement in the selected repository…":"Message Nexus…";
- $("composerHint").textContent=buildMode?"Build mode coordinates the AI team, commits changes to a new GitHub branch, and opens a pull request. Select a repository first.":"Enter to send · Shift + Enter for a new line";
+ $("composerHint").textContent=buildMode?"Choose execution mode and effort. Automatic commits directly; Pull Request opens a PR.":"Enter to send · Shift + Enter for a new line";
 });
 
 function resizeInput(){const el=$("chatInput");el.style.height="auto";el.style.height=Math.min(el.scrollHeight,220)+"px";}
@@ -194,4 +194,4 @@ $("openSidebar").addEventListener("click",openSidebar);
 $("closeSidebar").addEventListener("click",closeSidebar);
 $("mobileScrim").addEventListener("click",closeSidebar);
 window.addEventListener("resize",()=>{if(window.innerWidth>700)closeSidebar();});
-loadChats();refreshStatus();refreshRepos();
+$("executionMode").value=executionMode; $("effortLevel").value=effortLevel;\n$("executionMode").addEventListener("change",e=>{executionMode=e.target.value;localStorage.setItem("nexus.build.mode",executionMode);});\n$("effortLevel").addEventListener("change",e=>{effortLevel=e.target.value;localStorage.setItem("nexus.build.effort",effortLevel);});\nloadChats();refreshStatus();refreshRepos();
