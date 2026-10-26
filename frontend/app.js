@@ -123,14 +123,15 @@ function renderTeamDiscussion(team){
 }
 
 function formatText(text){
- // Escape first; preserve code fences and simple paragraphs without interpreting model output as HTML.
- const safe=escapeHTML(text);
+ // Normalize providers that escape Markdown markers, then escape all model content before formatting.
+ const safe=escapeHTML(String(text??"").replace(/\\(\*)/g,"$1"));
  return safe.split(/\n{2,}/).map(part=>{
    if(part.startsWith("```")&&part.endsWith("```")){
      const code=part.replace(/^```[^\n]*\n?/,"").replace(/\n?```$/,"");
      return "<pre><code>"+code+"</code></pre>";
    }
-   return "<p>"+part.replace(/\n/g,"<br>")+"</p>";
+   const formatted=part.replace(/\*\*(.+?)\*\*/g,"<strong>$1</strong>").replace(/~~(.+?)~~/g,"<del>$1</del>");
+   return "<p>"+formatted.replace(/\n/g,"<br>")+"</p>";
  }).join("");
 }
 function scrollBottom(){const sc=$("chatScroll");requestAnimationFrame(()=>{sc.scrollTop=sc.scrollHeight;});}
