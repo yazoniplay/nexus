@@ -14,6 +14,16 @@ let githubLogin = "";
 
 const $ = (id) => document.getElementById(id);
 const escapeHTML = (value) => String(value).replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+async function githubAction(action, payload={}) {
+  const response = await fetch(NEXUS_API_BASE + "/api/github/actions", {
+    method:"POST",
+    headers:{"Content-Type":"application/json"},
+    body:JSON.stringify({action, payload})
+  });
+  const data = await response.json();
+  if (!response.ok) throw new Error(data.detail || data.error || "GitHub action failed");
+  return data.result;
+}
 function toast(message, type="") {
   const el = document.createElement("div");
   el.className = "toast " + type;
@@ -173,29 +183,30 @@ $("reloadRepos").addEventListener("click", async () => {
 });
 async function refreshGithubConnection() {
   try {
-    const response = await fetch(NEXUS_API_BASE + "/api/github/connection", {credentials:"include", signal:AbortSignal.timeout(4000)});
-    const data = await response.json();
-    githubConnected = Boolean(response.ok && data.connected);
-    githubConfigured = Boolean(data.configured);
-    githubLogin = data.login || "";
-    $("connectGithubTop").textContent = githubConnected ? "Connected · " + githubLogin : "Connect GitHub ↗";
-    $("connectGithubMain").textContent = githubConnected ? "GitHub connected: " + githubLogin : "Connect GitHub";
-    $("githubAccountLabel").textContent = githubConnected ? "Connected as " + githubLogin : "No GitHub account connected.";
-    if (githubConnected) loadRepositories();
+    await githubAction("list_repos");
+    githubConnected = true;
+    githubConfigured = true;
+    githubLogin = "Supabase PAT";
+    $("connectGithubTop").textContent = "GitHub · Supabase PAT";
+    $("connectGithubMain").textContent = "GitHub connected through Supabase";
+    $("githubAccountLabel").textContent = "GitHub token is held in Supabase Edge Function secrets.";
+    await loadRepositories();
   } catch {
     githubConnected = false;
+    githubConfigured = false;
     githubLogin = "";
+    $("connectGithubTop").textContent = "GitHub not configured";
+    $("connectGithubMain").textContent = "Configure GitHub PAT in Supabase";
+    $("githubAccountLabel").textContent = "Add GITHUB_TOKEN to Supabase Edge Function secrets and configure backend Supabase credentials.";
   }
 }
 async function loadRepositories() {
-  if (!backendHealthy || !githubConnected) return;
+  if (!backendHealthy) return;
   try {
-    const response = await fetch(NEXUS_API_BASE + "/api/github/repositories", {credentials:"include"});
-    const data = await response.json();
-    if (!response.ok) throw new Error(data.detail || "Could not load repositories");
-    const repos = data.repositories || [];
+    const data = await githubAction("list_repos");
+    const repos = data.repos || [];
     $("repoCount").textContent = String(repos.length);
-    $("repoSubtext").textContent = repos.length + " repositories accessible to " + githubLogin + ".";
+    $("repoSubtext").textContent = repos.length + " repositories available through the Supabase PAT.";
     $("chatRepository").innerHTML = '<option value="">No repository selected</option>' + repos.map(repo => '<option value="' + escapeHTML(repo.full_name) + '">' + escapeHTML(repo.full_name) + '</option>').join("");
     $("repoEmpty").style.display = repos.length ? "none" : "block";
     $("repoGrid").innerHTML = repos.map(repo => '<article class="repo-card"><h3>'+escapeHTML(repo.full_name || repo.name)+'</h3><p>'+escapeHTML(repo.description || "No description")+'</p><span class="setting-value">'+escapeHTML(repo.private?"PRIVATE":"PUBLIC")+'</span><a href="'+escapeHTML(repo.html_url || "#")+'" target="_blank" rel="noopener noreferrer">Open repository ↗</a></article>').join("");
@@ -203,26 +214,16 @@ async function loadRepositories() {
 }
 function connectGithub() {
   if (!backendHealthy) return toast("Start the Nexus backend first.", "error");
-  if (!githubConfigured) return toast("GitHub OAuth is not configured on the backend yet. Follow the GitHub setup section in the repository README.", "error");
-  window.location.href = NEXUS_API_BASE + "/api/github/connect";
+  refreshGithubConnection().then(() => {
+    if (githubConnected) toast("GitHub actions are available through the Supabase PAT.");
+    else toast("Check GITHUB_TOKEN and backend Supabase credentials.", "error");
+  });
 }
 $("connectGithubTop").addEventListener("click", connectGithub);
 $("connectGithubMain").addEventListener("click", connectGithub);
-$("disconnectGithub").addEventListener("click", async () => {
-  try {
-    const response = await fetch(NEXUS_API_BASE + "/api/github/disconnect", {method:"POST",credentials:"include"});
-    const data = await response.json();
-    if (!response.ok) throw new Error(data.detail || "Disconnect failed");
-    githubConnected = false;
-    githubLogin = "";
-    $("connectGithubTop").textContent = "Connect GitHub ↗";
-    $("connectGithubMain").textContent = "Connect GitHub";
-    $("githubAccountLabel").textContent = "No GitHub account connected.";
-    $("repoCount").textContent = "0";
-    $("repoGrid").innerHTML = "";
-    $("repoEmpty").style.display = "block";
-    toast("GitHub disconnected.");
-  } catch (err) { toast(err.message || "Could not disconnect GitHub.", "error"); }
+$("reloadRepos").addEventListener("click", loadRepositories);
+$("disconnectGithub").addEventListener("click", () => {
+  toast("The GitHub token is stored in Supabase. Remove GITHUB_TOKEN from Edge Function secrets there to disconnect it.");
 });
 $("startTask").addEventListener("click", async () => {
   const message = $("quickTask").value.trim();
