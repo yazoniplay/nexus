@@ -145,6 +145,47 @@ def _github_identity(request: Request) -> dict[str, Any]:
     return payload
 
 
+
+async def github_repository_context(request: Request, full_name: str) -> dict[str, Any]:
+    """Fetch a small, read-only repository context for agent analysis."""
+    import re
+    if not re.fullmatch(r"[A-Za-z0-9_.-]{1,100}/[A-Za-z0-9_.-]{1,100}", full_name):
+        raise HTTPException(status_code=400, detail="Repository must use owner/repository format.")
+    payload = _github_identity(request)
+    try:
+        row = await _supabase_get(int(payload["github_id"]))
+        if not row:
+            raise HTTPException(status_code=401, detail="Reconnect GitHub to access repositories.")
+        token = _fernet().decrypt(row["token_ciphertext"].encode()).decode()
+    except HTTPException:
+        raise
+    except (RuntimeError, KeyError, ValueError, InvalidToken) as exc:
+        raise HTTPException(status_code=503, detail=str(exc)[:300])
+    headers = {"Authorization": f"Bearer {token}", "Accept": "application/vnd.github+json", "X-GitHub-Api-Version": "2022-11-28"}
+    async with httpx.AsyncClient(timeout=HTTP_TIMEOUT) as client:
+        repo_response = await client.get(f"https://api.github.com/repos/{full_name}", headers=headers)
+        if repo_response.status_code == 404:
+            raise HTTPException(status_code=404, detail="Repository not found or this account cannot access it.")
+        if repo_response.is_error:
+            raise HTTPException(status_code=502, detail=f"GitHub repository lookup failed (HTTP {repo_response.status_code}).")
+        repo = repo_response.json()
+        root_response = await client.get(f"https://api.github.com/repos/{full_name}/contents", headers=headers)
+        if root_response.is_error:
+            raise HTTPException(status_code=502, detail="Could not read the repository root.")
+        root_items = root_response.json()
+        root_files = [{"name": item.get("name", ""), "type": item.get("type", ""), "path": item.get("path", "")} for item in root_items[:80] if isinstance(item, dict)]
+        readme_text = ""
+        readme_response = await client.get(f"https://api.github.com/repos/{full_name}/readme", headers=headers)
+        if readme_response.status_code == 200:
+            readme_data = readme_response.json()
+            if readme_data.get("encoding") == "base64":
+                try:
+                    readme_text = base64.b64decode(readme_data.get("content", "")).decode("utf-8", errors="replace")[:10000]
+                except (ValueError, TypeError):
+                    readme_text = ""
+    return {"repository": repo.get("full_name", full_name), "description": repo.get("description") or "", "default_branch": repo.get("default_branch", "main"), "private": bool(repo.get("private", False)), "root_files": root_files, "readme": readme_text}
+
+
 def configure_github_routes(app) -> None:
     @app.get("/api/github/connect")
     async def github_connect(response: Response):
