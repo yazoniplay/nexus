@@ -179,7 +179,8 @@ $("modeToggle").addEventListener("click",()=>{
  const button=$("modeToggle");
  button.classList.toggle("active",buildMode);
  button.setAttribute("aria-pressed",String(buildMode));
- button.textContent=buildMode?"🛠 Build mode":"💬 Chat mode";\n  $("buildControls").hidden=!buildMode;
+ button.textContent=buildMode?"🛠 Build mode":"💬 Chat mode";
+  $("buildControls").hidden=!buildMode;
  $("chatInput").placeholder=buildMode?"Describe what you want Nexus to implement in the selected repository…":"Message Nexus…";
  $("composerHint").textContent=buildMode?"Choose execution mode and effort. Automatic commits directly; Pull Request opens a PR.":"Enter to send · Shift + Enter for a new line";
 });
