@@ -15,7 +15,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
 import providers
-from github_oauth import configure_github_routes
+from github_oauth import configure_github_routes, github_is_configured
 
 app = FastAPI(
     title="Nexus API",
@@ -78,7 +78,7 @@ def status():
         "capabilities": {
             "live_model_calls": True,
             "multi_model_discussion": True,
-            "github_integration": True,
+            "github_integration": github_is_configured(),
             "durable_jobs": False,
             "isolated_code_execution": False,
         },
