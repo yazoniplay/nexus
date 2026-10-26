@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#0b0d12">
+  <meta name="description" content="Nexus multi-AI development command center">
+  <title>Nexus — AI Command Center</title>
+  <link rel="stylesheet" href="./styles.css">
+</head>
+<body>
+  <div class="app-shell">
+    <aside class="sidebar">
+      <a class="brand" href="#" aria-label="Nexus home"><span class="brand-mark">N</span><span>NEXUS<span class="brand-dot">.</span></span></a>
+      <button class="new-chat" id="newChat"><span>＋</span> New conversation</button>
+      <div class="nav-label">WORKSPACE</div>
+      <button class="nav-item active" data-view="overview"><span>◫</span> Overview</button>
+      <button class="nav-item" data-view="chat"><span>⌘</span> AI team chat</button>
+      <button class="nav-item" data-view="projects"><span>⌁</span> Repositories</button>
+      <button class="nav-item" data-view="workflows"><span>⤳</span> Workflows</button>
+      <button class="nav-item" data-view="activity"><span>◷</span> Activity log</button>
+      <div class="nav-label second-label">CONFIGURATION</div>
+      <button class="nav-item" data-view="providers"><span>✳</span> AI providers</button>
+      <button class="nav-item" data-view="settings"><span>⚙</span> Settings</button>
+      <div class="sidebar-bottom">
+        <div class="connection-indicator"><span class="status-dot neutral"></span><span id="connectionText">Checking backend…</span></div>
+        <div class="user-chip"><div class="avatar">Y</div><div><strong>Workspace owner</strong><small>Personal workspace</small></div><span class="more">···</span></div>
+      </div>
+    </aside>
+
+    <main class="main-content">
+      <header class="topbar">
+        <div class="breadcrumbs"><span>Workspace</span><span class="crumb-sep">/</span><strong id="pageName">Overview</strong></div>
+        <div class="top-actions"><span class="secure-label"><span>◆</span> Private workspace</span><button class="icon-button" id="refreshButton" aria-label="Refresh status" title="Refresh status">↻</button><button class="primary-button" id="connectGithubTop">Connect GitHub <span>↗</span></button></div>
+      </header>
+
+      <section class="view active-view" id="view-overview">
+        <div class="welcome-row"><div><div class="eyebrow">YOUR AI DEVELOPMENT TEAM</div><h1>Make progress.<br><span>Without the busywork.</span></h1><p class="intro">One workspace for four AI providers, your repositories, and the work that connects them.</p></div><div class="orbit-art" aria-hidden="true"><div class="orbit orbit-one"></div><div class="orbit orbit-two"></div><div class="orbit-core">N</div><i class="orbit-node node-a">C</i><i class="orbit-node node-b">G</i><i class="orbit-node node-c">O</i><i class="orbit-node node-d">◎</i></div></div>
+        <div class="status-banner"><div class="banner-icon">✳</div><div><strong id="setupTitle">Set up your workspace</strong><p id="setupDescription">Connect the backend and configure providers to start real AI conversations. This UI does not simulate connected services.</p></div><button class="text-button" data-go="providers">Configure providers <span>→</span></button></div>
+        <div class="section-heading"><div><h2>Workspace overview</h2><p>Live status, not estimated activity.</p></div><span class="live-pill"><span class="status-dot neutral"></span><span id="systemStatus">Checking system</span></span></div>
+        <div class="stats-grid">
+          <article class="stat-card"><div class="stat-top"><span>AI PROVIDERS</span><span class="stat-symbol">✳</span></div><div class="stat-number" id="providerCount">0<span class="stat-unit"> / 4</span></div><div class="stat-foot">Verified connections</div></article>
+          <article class="stat-card"><div class="stat-top"><span>REPOSITORIES</span><span class="stat-symbol">⌁</span></div><div class="stat-number" id="repoCount">0</div><div class="stat-foot">Connected to Nexus</div></article>
+          <article class="stat-card"><div class="stat-top"><span>ACTIVE RUNS</span><span class="stat-symbol">⤳</span></div><div class="stat-number" id="runCount">0</div><div class="stat-foot">Background workflows</div></article>
+          <article class="stat-card"><div class="stat-top"><span>NEEDS ATTENTION</span><span class="stat-symbol">!</span></div><div class="stat-number" id="attentionCount">0</div><div class="stat-foot">Failed or blocked runs</div></article>
+        </div>
+        <div class="lower-grid">
+          <section class="panel provider-panel"><div class="panel-heading"><div><h2>AI team</h2><p>Configure each provider to activate its agent.</p></div><button class="subtle-button" data-go="providers">Manage ↗</button></div><div id="providerList" class="provider-list"></div></section>
+          <section class="panel start-panel"><div class="panel-heading"><div><h2>Start a task</h2><p>Describe the outcome. Choose how the team works.</p></div></div><label class="field-label" for="quickTask">YOUR GOAL</label><textarea id="quickTask" placeholder="e.g. Inspect my app, identify the biggest mobile issues, and propose a plan."></textarea><div class="task-controls"><label class="select-wrap"><span class="sr-only">Mode</span><select id="quickMode"><option value="discuss">Discuss first</option><option value="plan">Plan only</option><option value="build">Build in workspace</option></select></label><button class="primary-button" id="startTask">Start task <span>→</span></button></div><p class="fine-print">Build mode stays unavailable until execution and repository permissions are configured.</p></section>
+        </div>
+      </section>
+
+      <section class="view" id="view-chat">
+        <div class="page-title"><div class="eyebrow">COLLABORATION</div><h1>AI team chat</h1><p>Give the models a shared problem. Let them compare findings, challenge assumptions, and converge.</p></div>
+        <div class="chat-layout"><div class="chat-main panel"><div class="chat-toolbar"><div><strong id="chatTitle">New team discussion</strong><small>Shared thread · sequential, traceable turns</small></div><span class="mode-badge">DISCUSSION MODE</span></div><div class="chat-messages" id="chatMessages"><div class="empty-chat"><div class="empty-chat-icon">✳</div><h3>Bring the team a problem.</h3><p>Choose a goal below. Once providers are configured, each agent's actual response will appear here with its identity and status.</p></div></div><form id="chatForm" class="chat-composer"><textarea id="chatInput" rows="2" placeholder="Message your AI team…" aria-label="Message your AI team"></textarea><div class="composer-bottom"><span>Enter to send · Shift+Enter for a new line</span><button class="primary-button" type="submit">Send to team ↑</button></div></form></div><aside class="panel chat-side"><h3>Participants</h3><div id="chatParticipants" class="participant-list"></div><div class="side-divider"></div><h3>Discussion rules</h3><ul class="rule-list"><li>Independent first opinions</li><li>Evidence-based critique</li><li>Bounded discussion rounds</li><li>No file changes in discussion mode</li></ul><div class="notice-small">Agents will not be shown as online unless the backend confirms their connection.</div></aside></div>
+      </section>
+
+      <section class="view" id="view-projects">
+        <div class="page-title"><div class="eyebrow">SOURCE CONTROL</div><h1>Repositories</h1><p>Choose which GitHub projects Nexus is allowed to access.</p></div>
+        <div class="panel repo-connect-card"><div class="repo-icon">⌁</div><div class="repo-connect-copy"><h2>Connect your GitHub</h2><p>Authorize Nexus through a GitHub App, then select the repositories you want to make available. Work should happen on isolated branches.</p></div><button class="primary-button" id="connectGithubMain">Connect GitHub <span>↗</span></button></div>
+        <div class="section-heading"><div><h2>Connected repositories</h2><p id="repoSubtext">No repository connections verified yet.</p></div><button class="subtle-button" id="reloadRepos">Refresh ↻</button></div><div class="panel empty-state" id="repoEmpty"><div class="empty-state-icon">⌁</div><h3>No connected repositories</h3><p>Connect GitHub to load repositories you explicitly authorize.</p></div><div id="repoGrid" class="repo-grid"></div>
+      </section>
+
+      <section class="view" id="view-workflows"><div class="page-title"><div class="eyebrow">AUTOMATION</div><h1>Workflows</h1><p>Background jobs, agent handoffs, execution and verification.</p></div><div class="panel empty-state"><div class="empty-state-icon">⤳</div><h3>No workflows running</h3><p>Workflow execution will appear here when the task queue is configured and a task is started.</p></div></section>
+      <section class="view" id="view-activity"><div class="page-title"><div class="eyebrow">AUDIT TRAIL</div><h1>Activity log</h1><p>Traceable events from the backend, agents and repository operations.</p></div><div class="panel empty-state"><div class="empty-state-icon">◷</div><h3>No events yet</h3><p>Verified backend events will be recorded here as integrations are implemented.</p></div></section>
+
+      <section class="view" id="view-providers"><div class="page-title"><div class="eyebrow">MODEL CONFIGURATION</div><h1>AI providers</h1><p>Connect the models that will form your team. Credentials belong on the server, never in this browser.</p></div><div class="security-callout"><span>◆</span><div><strong>Credentials stay server-side</strong><p>Configure keys in the backend environment. The dashboard never stores or displays provider secrets.</p></div></div><div class="provider-settings-grid" id="providerSettings"></div></section>
+      <section class="view" id="view-settings"><div class="page-title"><div class="eyebrow">PREFERENCES</div><h1>Settings</h1><p>Workspace controls and safety defaults.</p></div><div class="panel settings-panel"><div class="setting-row"><div><strong>Require approval before production changes</strong><p>Keep destructive and production-impacting operations behind explicit approval.</p></div><span class="setting-value">ON BY DEFAULT</span></div><div class="setting-row"><div><strong>Isolated branches</strong><p>Code changes should be made away from the default branch.</p></div><span class="setting-value">REQUIRED</span></div><div class="setting-row"><div><strong>Bounded agent discussions</strong><p>Limit rounds, timeouts, and model spend to prevent runaway loops.</p></div><span class="setting-value">REQUIRED</span></div><div class="setting-row"><div><strong>Audit log</strong><p>Record task status, agent turns, tool actions, and verification results.</p></div><span class="setting-value">REQUIRED</span></div></div></section>
+      <footer class="app-footer"><span>NEXUS <span class="brand-dot">●</span> MULTI-AI WORKSPACE</span><span>Early foundation · Integrations activate only after verification</span></footer>
+    </main>
+  </div>
+  <div class="toast-region" id="toastRegion" aria-live="polite"></div>
+  <script src="./app.js"></script>
+</body>
+</html>
