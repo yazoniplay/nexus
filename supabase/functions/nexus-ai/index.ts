@@ -21,6 +21,7 @@ async function repositoryContext(fullName:string){
  if(!/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/.test(fullName))throw new Error("Invalid repository name.");
  const parts=fullName.split("/").map(encodeURIComponent),prefix="/repos/"+parts.join("/");
  const repo=await github(prefix);
+ if(repo.private)throw new Error("Private repositories require a secure GitHub sign-in, which is not enabled yet.");
  const branch=repo.default_branch||"main";
  const tree=await github(prefix+"/git/trees/"+encodeURIComponent(branch)+"?recursive=1");
  const entries=Array.isArray(tree.tree)?tree.tree:[];
@@ -63,7 +64,7 @@ Deno.serve(async(req:Request)=>{
  try{
   if(x.action==="github_repos"){
    const data=await github("/user/repos?per_page=100&sort=updated&affiliation=owner,collaborator,organization_member");
-   const repositories=(Array.isArray(data)?data:[]).map((r:any)=>({id:r.id,full_name:r.full_name,private:Boolean(r.private),description:r.description||"",default_branch:r.default_branch||"main",updated_at:r.updated_at||""}));
+   const repositories=(Array.isArray(data)?data:[]).filter((r:any)=>!r.private).map((r:any)=>({id:r.id,full_name:r.full_name,private:false,description:r.description||"",default_branch:r.default_branch||"main",updated_at:r.updated_at||""}));
    return json(200,{repositories});
   }
   if(x.action==="status"){const providers:any={anthropic:{configured:false,model:"No Claude API credential configured",verified:false}};for(const p of all)providers[p]={configured:!!key(p),model:model(p),verified:false};return json(200,{providers,repository_count:0,active_runs:0,attention_count:0});}
