@@ -10,7 +10,7 @@ Nexus is a responsive web workspace for coordinating Claude, OpenAI, Gemini, and
 - Bounded multi-model discussion: configured providers answer independently in parallel, then one configured model synthesizes the responses. No endless debate loop.
 - Provider failures and timeouts are surfaced rather than represented as successful answers.
 - Build mode is explicitly planning-only until GitHub access and isolated execution are implemented.
-- GitHub OAuth routes, signed HttpOnly sessions, encrypted token storage, and read-only repository listing are implemented in code; they require GitHub App OAuth credentials and the Supabase table setup below.
+- GitHub OAuth routes, signed HttpOnly sessions, encrypted token storage, read-only repository listing, and bounded repository context for AI discussions are implemented in code; they require GitHub App OAuth credentials and the Supabase table setup below.
 - Durable job queue/workers, isolated code execution, automatic PR creation, and deployment are **not implemented yet**.
 
 ## Development
