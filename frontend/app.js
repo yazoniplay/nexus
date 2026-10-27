@@ -16,6 +16,10 @@ let chats=[];
 let activeChatId=null;
 let sending=false;
 let buildMode=false;
+let activityPollTimer=null;
+let activeActivityRunId="";
+let currentBuildActivityEvents=[];
+const seenActivityIds=new Set();
 let pendingImages=[];
 const MAX_IMAGES=4, MAX_IMAGE_BYTES=500*1024;
 let executionMode=localStorage.getItem("nexus.build.mode")||"pull_request";
@@ -112,7 +116,7 @@ function renderMessages(){
    if(m.role==="user")return '<article class="message user"><div class="message-content">'+escapeHTML(m.text||"")+(Array.isArray(m.images)&&m.images.length?'<div class="message-images">'+m.images.map(src=>'<img src="'+src+'" alt="Uploaded image" loading="lazy">').join("")+'</div>':"")+'</div></article>';
    const p=PROVIDERS.find(x=>x.id===m.provider);
    const name=m.name||(p?p.name:(m.provider||"AI"));
-   return '<article class="message '+(m.error?"error":"")+'"><div class="message-avatar">'+escapeHTML(p?.letter||name.slice(0,1).toUpperCase())+'</div><div class="message-content"><div class="message-label">'+escapeHTML(name)+' <span class="message-model">'+escapeHTML(m.model||"")+'</span></div><div class="message-text">'+formatText(m.text||"No response returned.")+'</div>'+renderBuildArtifacts(m.files,m.id,m.pr)+renderTeamDiscussion(m.team)+'</div></article>';
+   return '<article class="message '+(m.error?"error":"")+'"><div class="message-avatar">'+escapeHTML(p?.letter||name.slice(0,1).toUpperCase())+'</div><div class="message-content"><div class="message-label">'+escapeHTML(name)+' <span class="message-model">'+escapeHTML(m.model||"")+'</span></div><div class="message-text">'+formatText(m.text||"No response returned.")+'</div>'+renderBuildActivityPanel(m.activity)+renderBuildArtifacts(m.files,m.id,m.pr)+renderTeamDiscussion(m.team)+'</div></article>';
  }).join("");
 
  host.querySelectorAll("[data-build-action]").forEach(btn=>btn.addEventListener("click",()=>{
@@ -154,11 +158,52 @@ function formatText(text){
  }).join("");
 }
 function scrollBottom(){const sc=$("chatScroll");requestAnimationFrame(()=>{sc.scrollTop=sc.scrollHeight;});}
-function setSending(value){sending=value;$("sendButton").disabled=value;$("chatInput").disabled=value;$("composerHint").textContent=value?"Waiting for every configured AI…":"Enter to send · Shift + Enter for a new line";}
+function setSending(value){sending=value;$("sendButton").disabled=value;$("chatInput").disabled=value;$("composerHint").textContent=value?(buildMode?"Watching live build activity…":"Waiting for every configured AI…"):"Enter to send · Shift + Enter for a new line";}
+function stopBuildActivityFeed(){if(activityPollTimer)clearTimeout(activityPollTimer);activityPollTimer=null;activeActivityRunId="";}
+function renderBuildActivity(events){
+ const list=$("liveActivityList");if(!list)return;
+ if(!events.length&&!list.children.length){list.innerHTML='<li class="activity-empty">Waiting for the first server event…</li>';return;}
+ const empty=list.querySelector(".activity-empty");if(empty)empty.remove();
+ for(const event of events){
+  const id=String(event.id??"");if(!id||seenActivityIds.has(id))continue;seenActivityIds.add(id);
+  const item=document.createElement("li");item.className="activity-event "+(event.level||"info");
+  const mark=document.createElement("span");mark.className="activity-mark";mark.textContent=event.level==="success"?"✓":event.level==="error"?"!":"·";
+  const body=document.createElement("div");body.className="activity-copy";
+  const head=document.createElement("div");head.className="activity-event-head";
+  const stage=document.createElement("strong");stage.textContent=String(event.stage||"Activity").replaceAll("_"," ");
+  const time=document.createElement("time");time.textContent=event.created_at?new Date(event.created_at).toLocaleTimeString([], {hour:"2-digit",minute:"2-digit",second:"2-digit"}):"";
+  head.append(stage,time);const message=document.createElement("p");message.textContent=String(event.message||"");
+  body.append(head,message);if(event.provider){const agent=document.createElement("span");agent.className="activity-agent";agent.textContent=String(event.provider);body.append(agent);}
+  item.append(mark,body);list.append(item);
+ }
+ const state=$("liveActivityState");if(state)state.textContent=events.some(e=>e.stage==="build_complete")?"Completed":events.some(e=>e.stage==="build_failed")?"Failed":"Live";
+}
+function renderBuildActivityPanel(events){
+ if(!Array.isArray(events)||!events.length)return "";
+ return '<details class="build-activity-panel" open><summary>Live build activity · '+events.length+' events</summary><ol>'+events.map(event=>'<li class="activity-event '+escapeHTML(event.level||"info")+'"><span class="activity-mark">'+(event.level==="success"?"✓":event.level==="error"?"!":"·")+'</span><div class="activity-copy"><div class="activity-event-head"><strong>'+escapeHTML(String(event.stage||"Activity").replaceAll("_"," "))+'</strong><time>'+escapeHTML(event.created_at?new Date(event.created_at).toLocaleTimeString(): "")+'</time></div><p>'+escapeHTML(event.message||"")+'</p>'+(event.provider?'<span class="activity-agent">'+escapeHTML(event.provider)+'</span>':"")+'</div></li>').join("")+'</ol></details>';
+}
+async function pollBuildActivity(runId,schedule=true){
+ if(activeActivityRunId!==runId)return;
+ try{
+  const r=await fetch(NEXUS_AI_URL,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({action:"build_activity",run_id:runId})});
+  const data=await r.json().catch(()=>({}));if(!r.ok)throw new Error(data.error||"Activity feed unavailable");
+  currentBuildActivityEvents=Array.isArray(data.events)?data.events:[];
+  renderBuildActivity(currentBuildActivityEvents);
+ }catch{
+  const state=$("liveActivityState");if(state)state.textContent="Reconnecting";
+ }
+ if(schedule&&activeActivityRunId===runId)activityPollTimer=setTimeout(()=>pollBuildActivity(runId,true),2200);
+}
+function startBuildActivityFeed(runId){
+ stopBuildActivityFeed();seenActivityIds.clear();currentBuildActivityEvents=[];activeActivityRunId=runId;
+ const state=$("liveActivityState");if(state)state.textContent="Connecting";
+ pollBuildActivity(runId,true);
+}
 function appendMessage(message){const c=activeChat();if(!c)return;c.messages.push(message);saveChats();renderHistory();renderMessages();}
 function titleFrom(text){const t=text.replace(/\s+/g," ").trim();return t.length>36?t.slice(0,36).trim()+"…":t||"New chat";}
 async function sendMessage(raw){
  const text=raw.trim();if((!text&&!pendingImages.length)||sending)return;
+ const buildRunId=buildMode?Array.from(crypto.getRandomValues(new Uint8Array(16)),b=>b.toString(16).padStart(2,"0")).join(""):"";
  const images=pendingImages.map(item=>({mimeType:item.mimeType,data:item.data}));
  const visibleImages=pendingImages.map(item=>item.dataUrl);
  pendingImages=[];renderImageAttachments();
@@ -168,17 +213,18 @@ async function sendMessage(raw){
  appendMessage({id:uid(),role:"user",text,images:visibleImages,at:Date.now()});
  $("chatInput").value="";resizeInput();setSending(true);
  const pending=document.createElement("article");pending.className="message";pending.id="pendingMessage";
- pending.innerHTML='<div class="message-avatar">N</div><div class="message-content"><div class="message-label">Nexus <span class="message-model">Waiting for responses</span></div><div class="loading-dots" aria-label="AI models are responding"><i></i><i></i><i></i></div></div>';
- $("messages").appendChild(pending);$("welcome").hidden=true;scrollBottom();
+ pending.innerHTML='<div class="message-avatar">N</div><div class="message-content"><div class="message-label">Nexus <span class="message-model">'+(buildMode?"Live build activity":"Waiting for responses")+'</span></div>'+(buildMode?'<section class="live-activity"><div class="live-activity-head"><strong>Build activity</strong><span id="liveActivityState">Starting</span></div><ol class="live-activity-list" id="liveActivityList"><li class="activity-empty">Connecting to the live activity feed…</li></ol><p class="activity-note">Live stage updates only — no fabricated thoughts or progress.</p></section>':'<div class="loading-dots" aria-label="AI models are responding"><i></i><i></i><i></i></div>')+'</div>';
+ $("messages").appendChild(pending);$("welcome").hidden=true;scrollBottom();if(buildMode)startBuildActivityFeed(buildRunId);
  try{
-   const r=await fetch(NEXUS_AI_URL,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({action:buildMode?"build":"chat",message:text,images:buildMode?[]:images,repo:selectedRepo,mode:executionMode,effort:effortLevel})});
+   const r=await fetch(NEXUS_AI_URL,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({action:buildMode?"build":"chat",message:text,images:buildMode?[]:images,repo:selectedRepo,mode:executionMode,effort:effortLevel,run_id:buildRunId||undefined})});
    const data=await r.json().catch(()=>({}));
    if(!r.ok)throw new Error(data.error||data.message||"AI request failed ("+r.status+")");
    if(buildMode){
      const build=data.build;
      if(!build)throw new Error("The gateway returned no build result.");
      const files=Array.isArray(build.files)?build.files:[];
-     appendMessage({id:uid(),role:"assistant",provider:"nexus",name:"Nexus Build",text:String(build.summary||"Build generated.")+(files.length?(build.mode==="pull_request"?"\n\nCommitted to branch "+(build.branch||"")+" and opened PR "+(build.pr?.number?"#"+build.pr.number:"")+".":"\n\nCommitted directly to "+(build.branch||"the default branch")+"."):"\n\nNo files were committed.")+((build.team?.engineers||[]).length?"\n\nTeam: "+build.team.engineers.join(" + ")+" · peer review: "+(build.team.reviews||[]).join(", ")+" · lead: "+(build.team.lead||"Nexus"):"")+((build.notes||[]).length?"\n\nNotes: "+build.notes.join(" · "):""),files,pr:build.pr||null,branch:build.branch||"",team:build.team||null,at:Date.now()});
+     await pollBuildActivity(buildRunId,false);
+     appendMessage({id:uid(),role:"assistant",provider:"nexus",name:"Nexus Build",activity:currentBuildActivityEvents,text:String(build.summary||"Build generated.")+(files.length?(build.mode==="pull_request"?"\n\nCommitted to branch "+(build.branch||"")+" and opened PR "+(build.pr?.number?"#"+build.pr.number:"")+".":"\n\nCommitted directly to "+(build.branch||"the default branch")+"."):"\n\nNo files were committed.")+((build.team?.engineers||[]).length?"\n\nTeam: "+build.team.engineers.join(" + ")+" · peer review: "+(build.team.reviews||[]).join(", ")+" · lead: "+(build.team.lead||"Nexus"):"")+((build.notes||[]).length?"\n\nNotes: "+build.notes.join(" · "):""),files,pr:build.pr||null,branch:build.branch||"",team:build.team||null,at:Date.now()});
      return;
    }
    const responses=Array.isArray(data.responses)?data.responses:[];
@@ -191,8 +237,9 @@ async function sendMessage(raw){
    if(failed.length)toast(failed.length+" AI provider(s) failed. Successful responses are shown.",true);
    providerStatus=providerStatus||{};renderProviders();
  }catch(e){
-   appendMessage({id:uid(),role:"assistant",provider:"nexus",name:"Nexus",text:"Message failed: "+(e.message||"Unknown error"),error:true,at:Date.now()});
+   appendMessage({id:uid(),role:"assistant",provider:"nexus",name:"Nexus",text:"Message failed: "+(e.message||"Unknown error"),error:true,activity:buildRunId?currentBuildActivityEvents:undefined,at:Date.now()});
  }finally{
+   if(buildRunId){await pollBuildActivity(buildRunId,false);stopBuildActivityFeed();}
    $("pendingMessage")?.remove();setSending(false);renderHistory();renderMessages();$("chatInput").focus();
  }
 }
