@@ -64,12 +64,88 @@ async function generate(p:P,prompt:string,system="You are an assistant in Nexus.
  if(!String(text).trim())throw new Error(p+" returned an empty response.");
  return {provider:p,model:m,text:String(text).trim()};
 }
+
+const studioDbUrl=()=>Deno.env.get("SUPABASE_URL")||"";
+const studioServiceKey=()=>Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")||"";
+async function studioDb(table:string,params:Record<string,string>={},method="GET",body?:unknown){
+ const base=studioDbUrl(),service=studioServiceKey();
+ if(!base||!service)throw new Error("Roblox bridge is not configured: SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are required.");
+ const query=new URLSearchParams(params).toString();
+ const headers:Record<string,string>={apikey:service,Authorization:"Bearer "+service};
+ if(body!==undefined)headers["Content-Type"]="application/json";
+ if(method==="POST"||method==="PATCH")headers.Prefer="return=representation";
+ const response=await fetch(base.replace(/\/$/,"")+"/rest/v1/"+table+(query?"?"+query:""),{method,headers,body:body===undefined?undefined:JSON.stringify(body),signal:AbortSignal.timeout(10000)});
+ const raw=await response.text();let data:any=null;try{data=raw?JSON.parse(raw):null;}catch{}
+ if(!response.ok)throw new Error("Roblox bridge database error ("+response.status+"): "+String(data?.message||raw||"request failed").slice(0,180));
+ return data;
+}
+const studioTokenValid=(token:unknown)=>typeof token==="string"&&/^[a-f0-9]{64}$/.test(token);
+async function studioSession(token:unknown,requirePaired=true){
+ if(!studioTokenValid(token))throw new Error("A valid Studio pairing token is required.");
+ const rows=await studioDb("nexus_studio_sessions",{select:"id,status,session_token,expires_at",session_token:"eq."+token,limit:"1"});
+ const session=Array.isArray(rows)?rows[0]:null;
+ if(!session||session.status==="revoked")throw new Error("Studio connection not found or revoked. Pair Nexus Studio again.");
+ if(requirePaired&&session.status!=="paired")throw new Error("Studio has not completed pairing yet.");
+ return session;
+}
+function randomHex(bytes=32){return Array.from(crypto.getRandomValues(new Uint8Array(bytes)),b=>b.toString(16).padStart(2,"0")).join("");}
+
 Deno.serve(async(req:Request)=>{
  if(req.method==="OPTIONS")return new Response("ok",{headers:cors});
  if(req.method!=="POST")return json(405,{error:"POST required"});
  if(rateLimited(req))return json(429,{error:"Too many requests. Wait one minute and try again."});
  let x:any;try{x=await req.json();}catch{return json(400,{error:"Expected JSON body"});}
  try{
+  if(x.action==="studio_pair_create"){
+   const pair_code=String(crypto.getRandomValues(new Uint32Array(1))[0]%100000000).padStart(8,"0");
+   const session_token=randomHex(32);
+   const expires_at=new Date(Date.now()+10*60*1000).toISOString();
+   await studioDb("nexus_studio_sessions",{},"POST",{pair_code,session_token,status:"pending",expires_at});
+   return json(200,{pair_code,session_token,expires_at});
+  }
+  if(x.action==="studio_pair_claim"){
+   const code=typeof x.pair_code==="string"?x.pair_code.trim():"";
+   if(!/^\\d{8}$/.test(code))return json(400,{error:"Enter the 8-digit pairing code shown in Nexus."});
+   const rows=await studioDb("nexus_studio_sessions",{select:"id,session_token,expires_at",pair_code:"eq."+code,status:"eq.pending",expires_at:"gt."+new Date().toISOString(),limit:"1"});
+   const session=Array.isArray(rows)?rows[0]:null;
+   if(!session)return json(404,{error:"Pairing code is invalid, expired, or already used. Create a new code in Nexus."});
+   const claimed=await studioDb("nexus_studio_sessions",{id:"eq."+session.id,status:"eq.pending"},"PATCH",{status:"paired",pair_code:null,paired_at:new Date().toISOString(),last_seen_at:new Date().toISOString()});
+   if(!Array.isArray(claimed)||!claimed.length)return json(409,{error:"Pairing code was already used. Create a new code in Nexus."});
+   return json(200,{session_token:session.session_token,paired:true});
+  }
+  if(x.action==="studio_status"){
+   const session=await studioSession(x.session_token,false);
+   const tasks=await studioDb("nexus_studio_tasks",{select:"id,task,status,result,created_at,completed_at",session_id:"eq."+session.id,order:"created_at.desc",limit:"20"});
+   return json(200,{paired:session.status==="paired",status:session.status,tasks:Array.isArray(tasks)?tasks:[]});
+  }
+  if(x.action==="studio_task_create"){
+   const task=typeof x.task==="string"?x.task.trim():"";
+   if(!task||task.length>3000)return json(400,{error:"Task must be 1–3000 characters."});
+   const session=await studioSession(x.session_token,true);
+   const rows=await studioDb("nexus_studio_tasks",{},"POST",{session_id:session.id,task,status:"queued"});
+   const created=Array.isArray(rows)?rows[0]:null;
+   if(!created)return json(502,{error:"Nexus could not queue the Studio task."});
+   return json(200,{task:{id:created.id,task:created.task,status:created.status,created_at:created.created_at}});
+  }
+  if(x.action==="studio_task_poll"){
+   const session=await studioSession(x.session_token,true);
+   await studioDb("nexus_studio_sessions",{id:"eq."+session.id},"PATCH",{last_seen_at:new Date().toISOString()});
+   const rows=await studioDb("nexus_studio_tasks",{select:"id,session_id,task,status,created_at",session_id:"eq."+session.id,status:"eq.queued",order:"created_at.asc",limit:"1"});
+   const task=Array.isArray(rows)?rows[0]:null;
+   if(!task)return json(200,{task:null});
+   const claimed=await studioDb("nexus_studio_tasks",{id:"eq."+task.id,session_id:"eq."+session.id,status:"eq.queued"},"PATCH",{status:"running",claimed_at:new Date().toISOString()});
+   return json(200,{task:Array.isArray(claimed)&&claimed.length?{id:task.id,task:task.task,status:"running"}:null});
+  }
+  if(x.action==="studio_task_result"){
+   const session=await studioSession(x.session_token,true);
+   const taskId=typeof x.task_id==="string"?x.task_id:"";
+   if(!/^[0-9a-f-]{36}$/i.test(taskId))return json(400,{error:"A valid task ID is required."});
+   const status=x.status==="failed"?"failed":"completed";
+   const result=typeof x.result==="string"?x.result.slice(0,4000):"Task reviewed in Studio.";
+   const rows=await studioDb("nexus_studio_tasks",{id:"eq."+taskId,session_id:"eq."+session.id,status:"eq.running"},"PATCH",{status,result,completed_at:new Date().toISOString()});
+   if(!Array.isArray(rows)||!rows.length)return json(404,{error:"Running task not found for this Studio connection."});
+   return json(200,{ok:true,task_id:taskId,status});
+  }
   if(x.action==="github_repos"){
    const data=await github("/user/repos?per_page=100&sort=updated&affiliation=owner,collaborator,organization_member");
    const repositories=(Array.isArray(data)?data:[]).filter((r:any)=>!r.private).map((r:any)=>({id:r.id,full_name:r.full_name,private:false,description:r.description||"",default_branch:r.default_branch||"main",updated_at:r.updated_at||""}));
