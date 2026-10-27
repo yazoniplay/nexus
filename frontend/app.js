@@ -203,7 +203,7 @@ function appendMessage(message){const c=activeChat();if(!c)return;c.messages.pus
 function titleFrom(text){const t=text.replace(/\s+/g," ").trim();return t.length>36?t.slice(0,36).trim()+"…":t||"New chat";}
 async function sendMessage(raw){
  const text=raw.trim();if((!text&&!pendingImages.length)||sending)return;
- const buildRunId=buildMode?Array.from(crypto.getRandomValues(new Uint8Array(16)),b=>b.toString(16).padStart(2,"0")).join(""):"";
+ const buildRunId=Array.from(crypto.getRandomValues(new Uint8Array(16)),b=>b.toString(16).padStart(2,"0")).join("");
  const images=pendingImages.map(item=>({mimeType:item.mimeType,data:item.data}));
  const visibleImages=pendingImages.map(item=>item.dataUrl);
  pendingImages=[];renderImageAttachments();
@@ -213,12 +213,13 @@ async function sendMessage(raw){
  appendMessage({id:uid(),role:"user",text,images:visibleImages,at:Date.now()});
  $("chatInput").value="";resizeInput();setSending(true);
  const pending=document.createElement("article");pending.className="message";pending.id="pendingMessage";
- pending.innerHTML='<div class="message-avatar">N</div><div class="message-content"><div class="message-label">Nexus <span class="message-model">'+(buildMode?"Live build activity":"Waiting for responses")+'</span></div>'+(buildMode?'<section class="live-activity"><div class="live-activity-head"><strong>Build activity</strong><span id="liveActivityState">Starting</span></div><ol class="live-activity-list" id="liveActivityList"><li class="activity-empty">Connecting to the live activity feed…</li></ol><p class="activity-note">Live stage updates only — no fabricated thoughts or progress.</p></section>':'<div class="loading-dots" aria-label="AI models are responding"><i></i><i></i><i></i></div>')+'</div>';
- $("messages").appendChild(pending);$("welcome").hidden=true;scrollBottom();if(buildMode)startBuildActivityFeed(buildRunId);
+ pending.innerHTML='<div class="message-avatar">N</div><div class="message-content"><div class="message-label">Nexus <span class="message-model">Live activity</span></div><section class="live-activity"><div class="live-activity-head"><strong>'+(buildMode?"Build activity":"AI activity")+'</strong><span id="liveActivityState">Starting</span></div><ol class="live-activity-list" id="liveActivityList"><li class="activity-empty">Connecting to the live activity feed…</li></ol><p class="activity-note">Live stage updates only — no fabricated thoughts or progress.</p></section></div>';
+ $("messages").appendChild(pending);$("welcome").hidden=true;scrollBottom();startBuildActivityFeed(buildRunId);
  try{
    const r=await fetch(NEXUS_AI_URL,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({action:buildMode?"build":"chat",message:text,images:buildMode?[]:images,repo:selectedRepo,mode:executionMode,effort:effortLevel,run_id:buildRunId||undefined})});
    const data=await r.json().catch(()=>({}));
    if(!r.ok)throw new Error(data.error||data.message||"AI request failed ("+r.status+")");
+   await pollBuildActivity(buildRunId,false);
    if(buildMode){
      const build=data.build;
      if(!build)throw new Error("The gateway returned no build result.");
@@ -229,7 +230,7 @@ async function sendMessage(raw){
    }
    const responses=Array.isArray(data.responses)?data.responses:[];
    if(data.message){
-     appendMessage({id:uid(),role:"assistant",provider:"nexus",name:"Nexus · Team conclusion",text:data.message,team:data.team||null,at:Date.now()});
+     appendMessage({id:uid(),role:"assistant",provider:"nexus",name:"Nexus · Team conclusion",text:data.message,team:data.team||null,activity:currentBuildActivityEvents,at:Date.now()});
    }else if(responses.length){
      responses.forEach(item=>appendMessage({id:uid(),role:"assistant",provider:item.provider,model:item.model,text:item.text||"No response text returned.",error:Boolean(item.error),at:Date.now()}));
    }else throw new Error("The gateway returned no AI responses.");
@@ -237,9 +238,10 @@ async function sendMessage(raw){
    if(failed.length)toast(failed.length+" AI provider(s) failed. Successful responses are shown.",true);
    providerStatus=providerStatus||{};renderProviders();
  }catch(e){
-   appendMessage({id:uid(),role:"assistant",provider:"nexus",name:"Nexus",text:"Message failed: "+(e.message||"Unknown error"),error:true,activity:buildRunId?currentBuildActivityEvents:undefined,at:Date.now()});
+   await pollBuildActivity(buildRunId,false);
+   appendMessage({id:uid(),role:"assistant",provider:"nexus",name:"Nexus",text:"Message failed: "+(e.message||"Unknown error"),error:true,activity:currentBuildActivityEvents,at:Date.now()});
  }finally{
-   if(buildRunId){await pollBuildActivity(buildRunId,false);stopBuildActivityFeed();}
+   await pollBuildActivity(buildRunId,false);stopBuildActivityFeed();
    $("pendingMessage")?.remove();setSending(false);renderHistory();renderMessages();$("chatInput").focus();
  }
 }
