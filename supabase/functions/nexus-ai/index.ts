@@ -113,6 +113,11 @@ Deno.serve(async(req:Request)=>{
    if(!Array.isArray(claimed)||!claimed.length)return json(409,{error:"Pairing code was already used. Create a new code in Nexus."});
    return json(200,{session_token:session.session_token,paired:true});
   }
+  if(x.action==="studio_revoke"){
+   const session=await studioSession(x.session_token,false);
+   await studioDb("nexus_studio_sessions",{id:"eq."+session.id},"PATCH",{status:"revoked",pair_code:null});
+   return json(200,{ok:true,revoked:true});
+  }
   if(x.action==="studio_status"){
    const session=await studioSession(x.session_token,false);
    const tasks=await studioDb("nexus_studio_tasks",{select:"id,task,status,result,created_at,completed_at",session_id:"eq."+session.id,order:"created_at.desc",limit:"20"});
