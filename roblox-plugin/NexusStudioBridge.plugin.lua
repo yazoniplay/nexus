@@ -102,6 +102,7 @@ pairButton.Activated:Connect(function()
 end)
 
 disconnectButton.Activated:Connect(function()
+    if connected and savedToken then pcall(function() request({action = "studio_revoke", session_token = savedToken}) end) end
     plugin:SetSetting(TOKEN_SETTING, nil); savedToken = nil; connected = false
     currentTaskId = nil; updateTask("Disconnected. Pair again from the Nexus website when needed.", nil)
     setStatus("Disconnected from Nexus.", false)
