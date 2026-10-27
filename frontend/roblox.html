@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#121419">
+  <meta name="description" content="Pair Nexus with Roblox Studio and send tasks to your open project.">
+  <title>Nexus — Roblox Studio</title>
+  <link rel="stylesheet" href="./styles.css">
+  <style>
+    .studio-page{max-width:760px;margin:0 auto;padding:34px 20px 64px;color:#eef1f5}
+    .studio-back{color:#aeb9ca;text-decoration:none;font-size:13px}
+    .studio-page h1{font-size:clamp(28px,5vw,42px);letter-spacing:-.04em;margin:28px 0 8px}
+    .studio-lead{color:#aeb9ca;line-height:1.65;max-width:620px}
+    .studio-card{margin-top:22px;padding:22px;border:1px solid #303540;border-radius:18px;background:#1a1d24}
+    .studio-card h2{font-size:17px;margin:0 0 10px}
+    .studio-muted{color:#aeb9ca;font-size:13px;line-height:1.6}
+    .studio-button{border:0;border-radius:10px;padding:11px 15px;background:#e9edf4;color:#171a20;font-weight:700;cursor:pointer}
+    .studio-button:disabled{opacity:.45;cursor:not-allowed}
+    .studio-code{font-size:30px;font-weight:750;letter-spacing:.22em;margin:18px 0;color:#fff;font-variant-numeric:tabular-nums}
+    .studio-input{box-sizing:border-box;width:100%;border:1px solid #3a404d;background:#111319;color:#f5f6f8;border-radius:10px;padding:12px;font:inherit}
+    .studio-task{min-height:105px;resize:vertical;line-height:1.5}
+    .studio-status{margin-top:12px;font-size:13px;color:#b7c2d2;overflow-wrap:anywhere}
+    .studio-status.error{color:#ff9b9b}.studio-status.good{color:#9fe1b2}
+    .studio-tasks{display:grid;gap:10px;margin-top:14px}
+    .studio-task-item{padding:13px;border:1px solid #353b47;border-radius:12px;background:#14171d}
+    .studio-task-item strong{font-size:12px;text-transform:uppercase;letter-spacing:.06em;color:#aeb9ca}
+    .studio-task-item p{white-space:pre-wrap;overflow-wrap:anywhere;margin:8px 0 0;line-height:1.5}
+    .studio-row{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+    @media(max-width:520px){.studio-page{padding:22px 14px}.studio-card{padding:17px}.studio-code{font-size:25px}}
+  </style>
+</head>
+<body>
+  <main class="studio-page">
+    <a class="studio-back" href="./index.html">← Back to Nexus</a>
+    <h1>Roblox Studio bridge</h1>
+    <p class="studio-lead">Pair your open Studio session with Nexus, then send tasks from this page. This first version queues tasks for human review; it does not execute code or change your game automatically.</p>
+    <section class="studio-card">
+      <h2>1. Connect Roblox Studio</h2>
+      <p class="studio-muted">Create a one-time pairing code, then enter it in the Nexus Bridge plugin in Studio. The code expires after 10 minutes.</p>
+      <div class="studio-row"><button class="studio-button" id="createPair">Create pairing code</button><button class="studio-button" id="checkPair" disabled>Check connection</button><button class="studio-button" id="disconnectStudio" disabled>Revoke connection</button></div>
+      <div class="studio-code" id="pairCode" aria-live="polite">— — — — — — — —</div>
+      <p class="studio-muted" id="pairExpiry">No active pairing code.</p>
+      <div class="studio-status" id="studioStatus" role="status">Not connected yet.</div>
+    </section>
+    <section class="studio-card">
+      <h2>2. Send a task</h2>
+      <p class="studio-muted">Example: “Inspect the current survival systems and tell me which scripts should be reviewed first.” The plugin will display the task in Studio.</p>
+      <textarea class="studio-input studio-task" id="taskInput" maxlength="3000" placeholder="Describe what you want Nexus to work on…" disabled></textarea>
+      <div class="studio-row" style="margin-top:12px"><button class="studio-button" id="sendTask" disabled>Send task to Studio</button><button class="studio-button" id="refreshTasks" disabled>Refresh tasks</button></div>
+      <div class="studio-tasks" id="taskList"></div>
+    </section>
+  </main>
+  <script src="./roblox.js"></script>
+</body>
+</html>
