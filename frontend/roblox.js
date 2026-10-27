@@ -49,7 +49,10 @@ $("sendTask").addEventListener("click",async()=>{
  $("sendTask").disabled=true;
  try{
   await api({action:"studio_task_create",session_token:token,task});
-  $("taskInput").value="";status("Task queued. Keep the Nexus Bridge plugin open in Studio.","good");await 
+  $("taskInput").value="";status("Task queued. Keep the Nexus Bridge plugin open in Studio.","good");await checkStatus();
+ }catch(e){status(e.message,"error");}
+ finally{$("sendTask").disabled=false;}
+});
 $("disconnectStudio").addEventListener("click",async()=>{
  if(!token)return;
  $("disconnectStudio").disabled=true;
@@ -60,8 +63,5 @@ $("disconnectStudio").addEventListener("click",async()=>{
   $("taskList").innerHTML="";controls(false);status("Nexus Studio connection revoked.","good");
  }catch(e){status(e.message,"error");$("disconnectStudio").disabled=false;}
 });
-checkStatus();
- }catch(e){status(e.message,"error");}
- finally{$("sendTask").disabled=false;}
-});
+
 checkStatus();
