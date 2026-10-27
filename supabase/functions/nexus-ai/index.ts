@@ -116,7 +116,7 @@ Deno.serve(async(req:Request)=>{
   }
   if(x.action==="studio_pair_claim"){
    const code=typeof x.pair_code==="string"?x.pair_code.trim():"";
-   if(!/^\\d{8}$/.test(code))return json(400,{error:"Enter the 8-digit pairing code shown in Nexus."});
+   if(!/^\d{8}$/.test(code))return json(400,{error:"Enter the 8-digit pairing code shown in Nexus."});
    const rows=await studioDb("nexus_studio_sessions",{select:"id,session_token,expires_at",pair_code:"eq."+code,status:"eq.pending",expires_at:"gt."+new Date().toISOString(),limit:"1"});
    const session=Array.isArray(rows)?rows[0]:null;
    if(!session)return json(404,{error:"Pairing code is invalid, expired, or already used. Create a new code in Nexus."});
