@@ -11,7 +11,7 @@ async function api(payload){
  return data;
 }
 function controls(paired){
- $("checkPair").disabled=!token;$("taskInput").disabled=!paired;$("sendTask").disabled=!paired;$("refreshTasks").disabled=!paired;
+ $("checkPair").disabled=!token;$("disconnectStudio").disabled=!token;$("taskInput").disabled=!paired;$("sendTask").disabled=!paired;$("refreshTasks").disabled=!paired;
 }
 function renderTasks(tasks){
  const host=$("taskList");
@@ -32,6 +32,7 @@ async function checkStatus(){
 $("createPair").addEventListener("click",async()=>{
  $("createPair").disabled=true;status("Creating secure pairing code…");
  try{
+  if(token){try{await api({action:"studio_revoke",session_token:token});}catch{}}
   const data=await api({action:"studio_pair_create"});
   token=data.session_token;localStorage.setItem(KEY,token);pairExpiry=data.expires_at;
   $("pairCode").textContent=data.pair_code;
@@ -48,7 +49,18 @@ $("sendTask").addEventListener("click",async()=>{
  $("sendTask").disabled=true;
  try{
   await api({action:"studio_task_create",session_token:token,task});
-  $("taskInput").value="";status("Task queued. Keep the Nexus Bridge plugin open in Studio.","good");await checkStatus();
+  $("taskInput").value="";status("Task queued. Keep the Nexus Bridge plugin open in Studio.","good");await 
+$("disconnectStudio").addEventListener("click",async()=>{
+ if(!token)return;
+ $("disconnectStudio").disabled=true;
+ try{
+  await api({action:"studio_revoke",session_token:token});
+  token="";localStorage.removeItem(KEY);$("pairCode").textContent="— — — — — — — —";
+  $("pairExpiry").textContent="Connection revoked.";
+  $("taskList").innerHTML="";controls(false);status("Nexus Studio connection revoked.","good");
+ }catch(e){status(e.message,"error");$("disconnectStudio").disabled=false;}
+});
+checkStatus();
  }catch(e){status(e.message,"error");}
  finally{$("sendTask").disabled=false;}
 });
